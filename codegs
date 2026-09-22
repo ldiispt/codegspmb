@@ -1,0 +1,5881 @@
+/*******************************************************
+ * PMB SETIAWATI
+ * SISTEM INFORMASI PRAKTIK MANDIRI BIDAN
+ *
+ * V1 TAHAP 6
+ *
+ * BASELINE:
+ * - Login
+ * - Session
+ * - Role
+ * - Dashboard
+ * - Logout
+ * - Audit Log
+ * - Data Pasien
+ * - Pendaftaran Kunjungan
+ * - Antrian
+ * - Pemeriksaan
+ * - Rekam Medis
+ *
+ * PERBAIKAN V1 TAHAP 6:
+ * - Sinkronisasi STATUS ANTRIAN dan KUNJUNGAN
+ * - Rekam medis dapat disimpan jika ANTRIAN sudah DILAYANI
+ *   walaupun STATUS KUNJUNGAN belum tersinkron
+ * - Setelah rekam medis tersimpan:
+ *      ANTRIAN   -> SELESAI
+ *      KUNJUNGAN -> SELESAI
+ * - getHeaderMap_ kompatibel dengan Sheet maupun Array Header
+ *******************************************************/
+
+
+/* =====================================================
+   WEB APP
+   ===================================================== */
+
+function doGet() {
+
+  return HtmlService
+    .createTemplateFromFile('Index')
+    .evaluate()
+    .setTitle(
+      PMB_CONFIG.APP_NAME ||
+      'PMB SETIAWATI'
+    )
+    .setXFrameOptionsMode(
+      HtmlService.XFrameOptionsMode.ALLOWALL
+    );
+
+}
+
+
+/* =====================================================
+   DATABASE
+   ===================================================== */
+
+function getDatabase() {
+
+  const spreadsheetId =
+    String(
+      PMB_CONFIG.DATABASE_SPREADSHEET_ID || ''
+    ).trim();
+
+  if (
+    spreadsheetId &&
+    spreadsheetId !==
+      'MASUKKAN_ID_SPREADSHEET_DI_SINI'
+  ) {
+
+    try {
+
+      return SpreadsheetApp
+        .openById(spreadsheetId);
+
+    } catch (error) {
+
+      throw new Error(
+        'Google Spreadsheet database tidak dapat dibuka.\n\n' +
+        'Pastikan DATABASE_SPREADSHEET_ID benar dan akun Apps Script memiliki akses.\n\n' +
+        'Detail: ' +
+        error.message
+      );
+
+    }
+
+  }
+
+  const active =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  if (active) {
+    return active;
+  }
+
+  throw new Error(
+    'Spreadsheet database belum ditentukan.\n\n' +
+    'Silakan isi DATABASE_SPREADSHEET_ID di Config.gs.'
+  );
+
+}
+
+
+function getSheet(sheetName) {
+
+  const db =
+    getDatabase();
+
+  const sheet =
+    db.getSheetByName(sheetName);
+
+  if (!sheet) {
+
+    throw new Error(
+      'Sheet "' +
+      sheetName +
+      '" tidak ditemukan.'
+    );
+
+  }
+
+  return sheet;
+
+}
+
+
+function getSheetByConfig(key) {
+
+  const sheetName =
+    PMB_CONFIG.SHEETS &&
+    PMB_CONFIG.SHEETS[key]
+      ? PMB_CONFIG.SHEETS[key]
+      : key;
+
+  return getSheet(sheetName);
+
+}
+
+
+/* =====================================================
+   HTML INCLUDE
+   ===================================================== */
+
+function include(filename) {
+
+  return HtmlService
+    .createHtmlOutputFromFile(filename)
+    .getContent();
+
+}
+
+
+/* =====================================================
+   SESSION
+   ===================================================== */
+
+const SESSION_DURATION_SECONDS = 21600;
+
+
+/* =====================================================
+   CREATE SESSION
+   ===================================================== */
+
+function createSession_(user) {
+
+  const token =
+    Utilities.getUuid();
+
+  const session = {
+
+    token: token,
+
+    userId:
+      user.USER_ID,
+
+    username:
+      user.USERNAME,
+
+    name:
+      user.NAMA,
+
+    role:
+      user.ROLE,
+
+    createdAt:
+      new Date().toISOString()
+
+  };
+
+  CacheService
+    .getScriptCache()
+    .put(
+      'PMB_SESSION_' + token,
+      JSON.stringify(session),
+      SESSION_DURATION_SECONDS
+    );
+
+  return token;
+
+}
+
+
+/* =====================================================
+   GET SESSION
+   ===================================================== */
+
+function getSession_(token) {
+
+  if (!token) {
+
+    throw new Error(
+      'Session tidak ditemukan.'
+    );
+
+  }
+
+  const cache =
+    CacheService.getScriptCache();
+
+  const data =
+    cache.get(
+      'PMB_SESSION_' + token
+    );
+
+  if (!data) {
+
+    throw new Error(
+      'Session telah berakhir. Silakan login kembali.'
+    );
+
+  }
+
+  return JSON.parse(data);
+
+}
+
+
+/* =====================================================
+   REQUIRE SESSION
+   ===================================================== */
+
+function requireSession_(token) {
+
+  return getSession_(token);
+
+}
+
+
+/* =====================================================
+   DESTROY SESSION
+   ===================================================== */
+
+function destroySession_(token) {
+
+  if (!token) return;
+
+  CacheService
+    .getScriptCache()
+    .remove(
+      'PMB_SESSION_' + token
+    );
+
+}
+
+
+/* =====================================================
+   HASH PASSWORD
+   ===================================================== */
+
+function hashPassword_(password) {
+
+  const digest =
+    Utilities.computeDigest(
+      Utilities.DigestAlgorithm.SHA_256,
+      String(password),
+      Utilities.Charset.UTF_8
+    );
+
+  return digest
+    .map(function(byte) {
+
+      const value =
+        byte < 0
+          ? byte + 256
+          : byte;
+
+      return (
+        '0' +
+        value.toString(16)
+      ).slice(-2);
+
+    })
+    .join('');
+
+}
+
+
+/* =====================================================
+   LOGIN
+   ===================================================== */
+
+function login(
+  username,
+  password
+) {
+
+  username =
+    String(username || '')
+      .trim();
+
+  password =
+    String(password || '');
+
+  if (
+    !username ||
+    !password
+  ) {
+
+    throw new Error(
+      'Username dan password wajib diisi.'
+    );
+
+  }
+
+  const sheet =
+    getSheetByConfig('USERS');
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+  if (values.length < 2) {
+
+    throw new Error(
+      'Data pengguna belum tersedia.'
+    );
+
+  }
+
+  const headers =
+    values[0];
+
+  const map = {};
+
+  headers.forEach(
+    function(header, index) {
+
+      map[
+        String(header).trim()
+      ] = index;
+
+    }
+  );
+
+  let foundUser =
+    null;
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    const row =
+      values[i];
+
+    const rowUsername =
+      String(
+        row[map.USERNAME] || ''
+      ).trim();
+
+    if (
+      rowUsername.toLowerCase() ===
+      username.toLowerCase()
+    ) {
+
+      foundUser = {
+
+        rowNumber:
+          i + 1,
+
+        USER_ID:
+          row[map.USER_ID],
+
+        USERNAME:
+          row[map.USERNAME],
+
+        PASSWORD_HASH:
+          row[map.PASSWORD_HASH],
+
+        NAMA:
+          row[map.NAMA],
+
+        ROLE:
+          row[map.ROLE],
+
+        STATUS:
+          row[map.STATUS]
+
+      };
+
+      break;
+
+    }
+
+  }
+
+
+  if (!foundUser) {
+
+    writeAuditLog_(
+      null,
+      username,
+      'LOGIN_GAGAL',
+      'AUTH',
+      '',
+      'Username tidak ditemukan'
+    );
+
+    throw new Error(
+      'Username atau password salah.'
+    );
+
+  }
+
+
+  if (
+    String(
+      foundUser.STATUS || ''
+    ).toUpperCase() !==
+    'AKTIF'
+  ) {
+
+    throw new Error(
+      'Akun pengguna tidak aktif.'
+    );
+
+  }
+
+
+  const passwordHash =
+    hashPassword_(password);
+
+  if (
+    passwordHash !==
+    String(
+      foundUser.PASSWORD_HASH || ''
+    )
+  ) {
+
+    writeAuditLog_(
+      foundUser.USER_ID,
+      foundUser.USERNAME,
+      'LOGIN_GAGAL',
+      'AUTH',
+      '',
+      'Password salah'
+    );
+
+    throw new Error(
+      'Username atau password salah.'
+    );
+
+  }
+
+
+  const token =
+    createSession_(foundUser);
+
+
+  writeAuditLog_(
+    foundUser.USER_ID,
+    foundUser.USERNAME,
+    'LOGIN',
+    'AUTH',
+    foundUser.USER_ID,
+    'Login berhasil'
+  );
+
+
+  return {
+
+    success: true,
+
+    token: token,
+
+    user: {
+
+      id:
+        foundUser.USER_ID,
+
+      username:
+        foundUser.USERNAME,
+
+      name:
+        foundUser.NAMA,
+
+      role:
+        foundUser.ROLE
+
+    }
+
+  };
+
+}
+
+
+/* =====================================================
+   LOGOUT
+   ===================================================== */
+
+function logout(token) {
+
+  let session =
+    null;
+
+  try {
+
+    session =
+      getSession_(token);
+
+  } catch (e) {
+
+    destroySession_(token);
+
+    return {
+      success: true
+    };
+
+  }
+
+
+  writeAuditLog_(
+    session.userId,
+    session.username,
+    'LOGOUT',
+    'AUTH',
+    session.userId,
+    'Logout berhasil'
+  );
+
+
+  destroySession_(token);
+
+
+  return {
+    success: true
+  };
+
+}
+
+
+/* =====================================================
+   SESSION CHECK
+   ===================================================== */
+
+function getCurrentUser(token) {
+
+  const session =
+    requireSession_(token);
+
+  return {
+
+    id:
+      session.userId,
+
+    username:
+      session.username,
+
+    name:
+      session.name,
+
+    role:
+      session.role
+
+  };
+
+}
+
+
+/* =====================================================
+   AUDIT LOG
+   ===================================================== */
+
+function writeAuditLog_(
+  userId,
+  username,
+  aksi,
+  modul,
+  referensiId,
+  keterangan
+) {
+
+  try {
+
+    const sheet =
+      getSheetByConfig('AUDIT_LOG');
+
+    const logId =
+      'LOG-' +
+      Utilities.getUuid()
+        .substring(0, 8)
+        .toUpperCase();
+
+    sheet.appendRow([
+
+      logId,
+
+      new Date(),
+
+      userId || '',
+
+      username || '',
+
+      aksi || '',
+
+      modul || '',
+
+      referensiId || '',
+
+      keterangan || '',
+
+      ''
+
+    ]);
+
+  } catch (error) {
+
+    console.error(
+      'Audit Log Error: ' +
+      error.message
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+   HEADER MAP
+   ===================================================== */
+
+function getHeaderMap_(source) {
+
+  /*
+   * Kompatibel dengan:
+   *
+   * 1. Google Sheet
+   * 2. Array header
+   */
+
+  let headers = [];
+
+
+  if (Array.isArray(source)) {
+
+    headers =
+      source;
+
+  }
+
+
+  else if (
+    source &&
+    typeof source.getLastColumn ===
+      'function' &&
+    typeof source.getRange ===
+      'function'
+  ) {
+
+    const lastColumn =
+      source.getLastColumn();
+
+    if (lastColumn < 1) {
+      return {};
+    }
+
+    headers =
+      source
+        .getRange(
+          1,
+          1,
+          1,
+          lastColumn
+        )
+        .getValues()[0];
+
+  }
+
+
+  else {
+
+    throw new Error(
+      'Sumber header tidak valid. ' +
+      'getHeaderMap_ membutuhkan Google Sheet ' +
+      'atau array header.'
+    );
+
+  }
+
+
+  const map = {};
+
+  headers.forEach(
+    function(header, index) {
+
+      const key =
+        String(
+          header || ''
+        ).trim();
+
+      if (key) {
+
+        map[key] =
+          index;
+
+      }
+
+    }
+  );
+
+  return map;
+
+}
+
+
+/* =====================================================
+   GENERATE NO RM
+   ===================================================== */
+
+function generateNoRM_() {
+
+  const sheet =
+    getSheetByConfig('PASIEN');
+
+  const map =
+    getHeaderMap_(sheet);
+
+  const lastRow =
+    sheet.getLastRow();
+
+  if (lastRow < 2) {
+
+    return (
+      String(
+        PMB_CONFIG.RM_PREFIX ||
+        'PMB-'
+      ) +
+      '000001'
+    );
+
+  }
+
+  const rmColumn =
+    map.NO_RM + 1;
+
+  const values =
+    sheet
+      .getRange(
+        2,
+        rmColumn,
+        lastRow - 1,
+        1
+      )
+      .getValues();
+
+  let maxNumber = 0;
+
+  const prefix =
+    String(
+      PMB_CONFIG.RM_PREFIX ||
+      'PMB-'
+    );
+
+
+  values.forEach(
+    function(row) {
+
+      const value =
+        String(
+          row[0] || ''
+        ).trim();
+
+      if (!value) return;
+
+      const number =
+        parseInt(
+          value.replace(
+            prefix,
+            ''
+          ),
+          10
+        );
+
+      if (
+        !isNaN(number) &&
+        number > maxNumber
+      ) {
+
+        maxNumber =
+          number;
+
+      }
+
+    }
+  );
+
+
+  return (
+    prefix +
+    String(
+      maxNumber + 1
+    ).padStart(
+      6,
+      '0'
+    )
+  );
+
+}
+
+
+/* =====================================================
+   FORMAT TANGGAL
+   ===================================================== */
+
+function formatDate_(value) {
+
+  if (!value) {
+    return '';
+  }
+
+
+  if (
+    Object.prototype.toString.call(value) ===
+    '[object Date]'
+  ) {
+
+    return Utilities.formatDate(
+      value,
+      PMB_CONFIG.TIMEZONE ||
+        'Asia/Jakarta',
+      'yyyy-MM-dd'
+    );
+
+  }
+
+
+  return String(value);
+
+}
+
+
+/* =====================================================
+   VALIDASI NIK
+   ===================================================== */
+
+function validateNIK_(nik) {
+
+  nik =
+    String(nik || '')
+      .replace(/\D/g, '');
+
+  if (!nik) {
+    return true;
+  }
+
+  return nik.length === 16;
+
+}
+
+
+/* =====================================================
+   GET DASHBOARD
+   ===================================================== */
+
+function getDashboardData(token) {
+
+  const session =
+    requireSession_(token);
+
+  const patientSheet =
+    getSheetByConfig('PASIEN');
+
+  const visitSheet =
+    getSheetByConfig('KUNJUNGAN');
+
+  const queueSheet =
+    getSheetByConfig('ANTRIAN');
+
+  const transactionSheet =
+    getSheetByConfig('TRANSAKSI');
+
+
+  /* ---------------------------------------------
+     PASIEN
+     --------------------------------------------- */
+
+  const patientData =
+    patientSheet
+      .getDataRange()
+      .getValues();
+
+  let totalPatients = 0;
+  let newPatientsToday = 0;
+
+
+  if (patientData.length > 1) {
+
+    const map =
+      getHeaderMap_(
+        patientSheet
+      );
+
+    totalPatients =
+      patientData.length - 1;
+
+    const today =
+      getTodayString_();
+
+
+    for (
+      let i = 1;
+      i < patientData.length;
+      i++
+    ) {
+
+      const created =
+        formatDate_(
+          patientData[i][
+            map.CREATED_AT
+          ]
+        );
+
+      if (
+        created &&
+        created.substring(0, 10) ===
+          today
+      ) {
+
+        newPatientsToday++;
+
+      }
+
+    }
+
+  }
+
+
+  /* ---------------------------------------------
+     KUNJUNGAN
+     --------------------------------------------- */
+
+  let todayVisits = 0;
+
+  const visitData =
+    visitSheet
+      .getDataRange()
+      .getValues();
+
+
+  if (visitData.length > 1) {
+
+    const map =
+      getHeaderMap_(
+        visitSheet
+      );
+
+    const today =
+      getTodayString_();
+
+
+    for (
+      let i = 1;
+      i < visitData.length;
+      i++
+    ) {
+
+      const dateValue =
+        formatDate_(
+          visitData[i][
+            map.TANGGAL
+          ]
+        );
+
+      if (
+        dateValue &&
+        dateValue.substring(0, 10) ===
+          today
+      ) {
+
+        todayVisits++;
+
+      }
+
+    }
+
+  }
+
+
+  /* ---------------------------------------------
+     ANTRIAN
+     --------------------------------------------- */
+
+  let todayQueue = 0;
+
+  const queueList = [];
+
+  const queueData =
+    queueSheet
+      .getDataRange()
+      .getValues();
+
+
+  if (queueData.length > 1) {
+
+    const map =
+      getHeaderMap_(
+        queueSheet
+      );
+
+    const today =
+      getTodayString_();
+
+
+    for (
+      let i = 1;
+      i < queueData.length;
+      i++
+    ) {
+
+      const dateValue =
+        formatDate_(
+          queueData[i][
+            map.TANGGAL
+          ]
+        );
+
+
+      if (
+        dateValue &&
+        dateValue.substring(0, 10) ===
+          today
+      ) {
+
+        todayQueue++;
+
+        queueList.push({
+
+          nomor:
+            queueData[i][
+              map.NOMOR_ANTRIAN
+            ] || '',
+
+          noRM:
+            queueData[i][
+              map.NO_RM
+            ] || '',
+
+          nama:
+            queueData[i][
+              map.NAMA_PASIEN
+            ] || '',
+
+          status:
+            queueData[i][
+              map.STATUS
+            ] || ''
+
+        });
+
+      }
+
+    }
+
+  }
+
+
+  /* ---------------------------------------------
+     PENDAPATAN
+     --------------------------------------------- */
+
+  let revenueToday = 0;
+
+  const transactionData =
+    transactionSheet
+      .getDataRange()
+      .getValues();
+
+
+  if (transactionData.length > 1) {
+
+    const map =
+      getHeaderMap_(
+        transactionSheet
+      );
+
+    const today =
+      getTodayString_();
+
+
+    for (
+      let i = 1;
+      i < transactionData.length;
+      i++
+    ) {
+
+      const dateValue =
+        formatDate_(
+          transactionData[i][
+            map.TANGGAL
+          ]
+        );
+
+
+      if (
+        dateValue &&
+        dateValue.substring(0, 10) ===
+          today
+      ) {
+
+        revenueToday +=
+          Number(
+            transactionData[i][
+              map.TOTAL
+            ] || 0
+          );
+
+      }
+
+    }
+
+  }
+
+
+  /* ---------------------------------------------
+     PASIEN TERBARU
+     --------------------------------------------- */
+
+  const latestPatients =
+    getLatestPatients_(5);
+
+
+  return {
+
+    user: {
+
+      id:
+        session.userId,
+
+      username:
+        session.username,
+
+      name:
+        session.name,
+
+      role:
+        session.role
+
+    },
+
+    stats: {
+
+      totalPatients:
+        totalPatients,
+
+      newPatientsToday:
+        newPatientsToday,
+
+      todayVisits:
+        todayVisits,
+
+      todayQueue:
+        todayQueue,
+
+      revenueToday:
+        revenueToday
+
+    },
+
+    queue:
+      queueList.slice(
+        0,
+        10
+      ),
+
+    latestPatients:
+      latestPatients
+
+  };
+
+}
+
+
+/* =====================================================
+   PASIEN
+   ===================================================== */
+
+function getLatestPatients_(limit) {
+
+  const sheet =
+    getSheetByConfig('PASIEN');
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length < 2) {
+    return [];
+  }
+
+
+  const map =
+    getHeaderMap_(sheet);
+
+  const result = [];
+
+
+  for (
+    let i = values.length - 1;
+    i >= 1 &&
+    result.length < limit;
+    i--
+  ) {
+
+    result.push(
+      patientRowToObject_(
+        values[i],
+        map
+      )
+    );
+
+  }
+
+
+  return result;
+
+}
+
+
+/* =====================================================
+   PATIENT ROW TO OBJECT
+   ===================================================== */
+
+function patientRowToObject_(
+  row,
+  map
+) {
+
+  return {
+
+    pasienId:
+      row[map.PASIEN_ID] || '',
+
+    noRM:
+      row[map.NO_RM] || '',
+
+    nik:
+      row[map.NIK] || '',
+
+    nama:
+      row[map.NAMA_LENGKAP] || '',
+
+    tempatLahir:
+      row[map.TEMPAT_LAHIR] || '',
+
+    tanggalLahir:
+      formatDate_(
+        row[map.TANGGAL_LAHIR]
+      ),
+
+    jenisKelamin:
+      row[map.JENIS_KELAMIN] || '',
+
+    alamat:
+      row[map.ALAMAT] || '',
+
+    noHP:
+      row[map.NO_HP] || '',
+
+    namaSuami:
+      row[map.NAMA_SUAMI] || '',
+
+    golonganDarah:
+      row[map.GOLONGAN_DARAH] || '',
+
+    status:
+      row[map.STATUS] || '',
+
+    catatan:
+      row[map.CATATAN] || '',
+
+    createdAt:
+      formatDate_(
+        row[map.CREATED_AT]
+      ),
+
+    updatedAt:
+      formatDate_(
+        row[map.UPDATED_AT]
+      )
+
+  };
+
+}
+
+
+/* =====================================================
+   GET DATA PASIEN
+   ===================================================== */
+
+function getPatients(
+  token,
+  search,
+  status
+) {
+
+  requireSession_(token);
+
+  search =
+    String(search || '')
+      .trim()
+      .toLowerCase();
+
+  status =
+    String(status || '')
+      .trim()
+      .toUpperCase();
+
+
+  const sheet =
+    getSheetByConfig('PASIEN');
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length < 2) {
+
+    return {
+
+      total: 0,
+
+      data: []
+
+    };
+
+  }
+
+
+  const map =
+    getHeaderMap_(sheet);
+
+  const result = [];
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    const patient =
+      patientRowToObject_(
+        values[i],
+        map
+      );
+
+
+    const searchable = [
+
+      patient.noRM,
+
+      patient.nik,
+
+      patient.nama,
+
+      patient.noHP
+
+    ]
+      .join(' ')
+      .toLowerCase();
+
+
+    if (
+      search &&
+      searchable.indexOf(search) === -1
+    ) {
+
+      continue;
+
+    }
+
+
+    if (
+      status &&
+      String(
+        patient.status || ''
+      ).toUpperCase() !==
+        status
+    ) {
+
+      continue;
+
+    }
+
+
+    patient._rowNumber =
+      i + 1;
+
+    result.push(patient);
+
+  }
+
+
+  result.reverse();
+
+
+  return {
+
+    total:
+      result.length,
+
+    data:
+      result
+
+  };
+
+}
+
+
+/* =====================================================
+   DETAIL PASIEN
+   ===================================================== */
+
+function getPatientDetail(
+  token,
+  pasienId
+) {
+
+  requireSession_(token);
+
+  pasienId =
+    String(
+      pasienId || ''
+    ).trim();
+
+
+  if (!pasienId) {
+
+    throw new Error(
+      'ID pasien tidak ditemukan.'
+    );
+
+  }
+
+
+  const patient =
+    findPatientById_(
+      pasienId
+    );
+
+
+  if (!patient) {
+
+    throw new Error(
+      'Data pasien tidak ditemukan.'
+    );
+
+  }
+
+
+  const visits =
+    getPatientVisits_(
+      patient.noRM
+    );
+
+
+  return {
+
+    patient:
+      patient,
+
+    visits:
+      visits
+
+  };
+
+}
+
+
+/* =====================================================
+   FIND PATIENT BY ID
+   ===================================================== */
+
+function findPatientById_(
+  pasienId
+) {
+
+  const sheet =
+    getSheetByConfig('PASIEN');
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length < 2) {
+    return null;
+  }
+
+
+  const map =
+    getHeaderMap_(sheet);
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    if (
+      String(
+        values[i][
+          map.PASIEN_ID
+        ] || ''
+      ) === pasienId
+    ) {
+
+      const patient =
+        patientRowToObject_(
+          values[i],
+          map
+        );
+
+      patient._rowNumber =
+        i + 1;
+
+      return patient;
+
+    }
+
+  }
+
+
+  return null;
+
+}
+
+
+/* =====================================================
+   RIWAYAT KUNJUNGAN
+   ===================================================== */
+
+function getPatientVisits_(
+  noRM
+) {
+
+  const sheet =
+    getSheetByConfig('KUNJUNGAN');
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length < 2) {
+    return [];
+  }
+
+
+  const map =
+    getHeaderMap_(sheet);
+
+  const result = [];
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    if (
+      String(
+        values[i][
+          map.NO_RM
+        ] || ''
+      ) !==
+      String(noRM || '')
+    ) {
+
+      continue;
+
+    }
+
+
+    result.push({
+
+      kunjunganId:
+        values[i][
+          map.KUNJUNGAN_ID
+        ] || '',
+
+      tanggal:
+        formatDate_(
+          values[i][
+            map.TANGGAL
+          ]
+        ),
+
+      jenisPelayanan:
+        values[i][
+          map.JENIS_PELAYANAN
+        ] || '',
+
+      keluhan:
+        values[i][
+          map.KELUHAN
+        ] || '',
+
+      status:
+        values[i][
+          map.STATUS
+        ] || ''
+
+    });
+
+  }
+
+
+  result.reverse();
+
+  return result;
+
+}
+
+
+/* =====================================================
+   TAMBAH PASIEN
+   ===================================================== */
+
+function addPatient(
+  token,
+  data
+) {
+
+  const session =
+    requireSession_(token);
+
+
+  if (!data) {
+
+    throw new Error(
+      'Data pasien tidak ditemukan.'
+    );
+
+  }
+
+
+  const nama =
+    String(
+      data.nama || ''
+    ).trim();
+
+
+  const nik =
+    String(
+      data.nik || ''
+    ).replace(
+      /\D/g,
+      ''
+    );
+
+
+  if (!nama) {
+
+    throw new Error(
+      'Nama lengkap wajib diisi.'
+    );
+
+  }
+
+
+  if (
+    nik &&
+    !validateNIK_(nik)
+  ) {
+
+    throw new Error(
+      'NIK harus terdiri dari 16 digit.'
+    );
+
+  }
+
+
+  const sheet =
+    getSheetByConfig('PASIEN');
+
+  const map =
+    getHeaderMap_(sheet);
+
+
+  if (nik) {
+
+    const values =
+      sheet
+        .getDataRange()
+        .getValues();
+
+
+    for (
+      let i = 1;
+      i < values.length;
+      i++
+    ) {
+
+      const existingNik =
+        String(
+          values[i][
+            map.NIK
+          ] || ''
+        ).replace(
+          /\D/g,
+          ''
+        );
+
+
+      if (
+        existingNik &&
+        existingNik === nik
+      ) {
+
+        throw new Error(
+          'NIK tersebut sudah terdaftar sebagai pasien.'
+        );
+
+      }
+
+    }
+
+  }
+
+
+  const pasienId =
+    'PSN-' +
+    Utilities.getUuid()
+      .substring(
+        0,
+        8
+      )
+      .toUpperCase();
+
+
+  const noRM =
+    generateNoRM_();
+
+
+  const now =
+    new Date();
+
+
+  const row =
+    new Array(
+      sheet.getLastColumn()
+    ).fill('');
+
+
+  setCell_(
+    row,
+    map.PASIEN_ID,
+    pasienId
+  );
+
+  setCell_(
+    row,
+    map.NO_RM,
+    noRM
+  );
+
+  setCell_(
+    row,
+    map.NIK,
+    nik
+  );
+
+  setCell_(
+    row,
+    map.NAMA_LENGKAP,
+    nama
+  );
+
+  setCell_(
+    row,
+    map.TEMPAT_LAHIR,
+    data.tempatLahir
+  );
+
+  setCell_(
+    row,
+    map.TANGGAL_LAHIR,
+    data.tanggalLahir
+  );
+
+  setCell_(
+    row,
+    map.JENIS_KELAMIN,
+    data.jenisKelamin
+  );
+
+  setCell_(
+    row,
+    map.ALAMAT,
+    data.alamat
+  );
+
+  setCell_(
+    row,
+    map.NO_HP,
+    data.noHP
+  );
+
+  setCell_(
+    row,
+    map.NAMA_SUAMI,
+    data.namaSuami
+  );
+
+  setCell_(
+    row,
+    map.GOLONGAN_DARAH,
+    data.golonganDarah
+  );
+
+  setCell_(
+    row,
+    map.STATUS,
+    'AKTIF'
+  );
+
+  setCell_(
+    row,
+    map.CATATAN,
+    data.catatan
+  );
+
+  setCell_(
+    row,
+    map.CREATED_AT,
+    now
+  );
+
+  setCell_(
+    row,
+    map.UPDATED_AT,
+    now
+  );
+
+  setCell_(
+    row,
+    map.CREATED_BY,
+    session.username
+  );
+
+  setCell_(
+    row,
+    map.UPDATED_BY,
+    session.username
+  );
+
+
+  sheet.appendRow(row);
+
+
+  writeAuditLog_(
+    session.userId,
+    session.username,
+    'TAMBAH',
+    'PASIEN',
+    pasienId,
+    'Menambahkan pasien ' +
+      noRM +
+      ' - ' +
+      nama
+  );
+
+
+  return {
+
+    success: true,
+
+    pasienId:
+      pasienId,
+
+    noRM:
+      noRM,
+
+    message:
+      'Pasien berhasil ditambahkan.'
+
+  };
+
+}
+
+
+/* =====================================================
+   SET CELL
+   ===================================================== */
+
+function setCell_(
+  row,
+  index,
+  value
+) {
+
+  if (
+    index === undefined ||
+    index === null ||
+    index < 0
+  ) {
+
+    return;
+
+  }
+
+
+  row[index] =
+    value === undefined ||
+    value === null
+      ? ''
+      : value;
+
+}
+
+
+/* =====================================================
+   EDIT PASIEN
+   ===================================================== */
+
+function updatePatient(
+  token,
+  pasienId,
+  data
+) {
+
+  const session =
+    requireSession_(token);
+
+
+  pasienId =
+    String(
+      pasienId || ''
+    ).trim();
+
+
+  if (!pasienId) {
+
+    throw new Error(
+      'ID pasien tidak ditemukan.'
+    );
+
+  }
+
+
+  const sheet =
+    getSheetByConfig('PASIEN');
+
+  const map =
+    getHeaderMap_(sheet);
+
+
+  const patient =
+    findPatientById_(
+      pasienId
+    );
+
+
+  if (!patient) {
+
+    throw new Error(
+      'Data pasien tidak ditemukan.'
+    );
+
+  }
+
+
+  const nama =
+    String(
+      data.nama || ''
+    ).trim();
+
+
+  const nik =
+    String(
+      data.nik || ''
+    ).replace(
+      /\D/g,
+      ''
+    );
+
+
+  if (!nama) {
+
+    throw new Error(
+      'Nama lengkap wajib diisi.'
+    );
+
+  }
+
+
+  if (
+    nik &&
+    !validateNIK_(nik)
+  ) {
+
+    throw new Error(
+      'NIK harus terdiri dari 16 digit.'
+    );
+
+  }
+
+
+  if (nik) {
+
+    const values =
+      sheet
+        .getDataRange()
+        .getValues();
+
+
+    for (
+      let i = 1;
+      i < values.length;
+      i++
+    ) {
+
+      const rowPatientId =
+        String(
+          values[i][
+            map.PASIEN_ID
+          ] || ''
+        );
+
+
+      if (
+        rowPatientId === pasienId
+      ) {
+
+        continue;
+
+      }
+
+
+      const existingNik =
+        String(
+          values[i][
+            map.NIK
+          ] || ''
+        ).replace(
+          /\D/g,
+          ''
+        );
+
+
+      if (
+        existingNik &&
+        existingNik === nik
+      ) {
+
+        throw new Error(
+          'NIK tersebut sudah digunakan pasien lain.'
+        );
+
+      }
+
+    }
+
+  }
+
+
+  const rowNumber =
+    patient._rowNumber;
+
+
+  const range =
+    sheet.getRange(
+      rowNumber,
+      1,
+      1,
+      sheet.getLastColumn()
+    );
+
+
+  const row =
+    range.getValues()[0];
+
+
+  setCell_(
+    row,
+    map.NIK,
+    nik
+  );
+
+  setCell_(
+    row,
+    map.NAMA_LENGKAP,
+    nama
+  );
+
+  setCell_(
+    row,
+    map.TEMPAT_LAHIR,
+    data.tempatLahir
+  );
+
+  setCell_(
+    row,
+    map.TANGGAL_LAHIR,
+    data.tanggalLahir
+  );
+
+  setCell_(
+    row,
+    map.JENIS_KELAMIN,
+    data.jenisKelamin
+  );
+
+  setCell_(
+    row,
+    map.ALAMAT,
+    data.alamat
+  );
+
+  setCell_(
+    row,
+    map.NO_HP,
+    data.noHP
+  );
+
+  setCell_(
+    row,
+    map.NAMA_SUAMI,
+    data.namaSuami
+  );
+
+  setCell_(
+    row,
+    map.GOLONGAN_DARAH,
+    data.golonganDarah
+  );
+
+  setCell_(
+    row,
+    map.CATATAN,
+    data.catatan
+  );
+
+  setCell_(
+    row,
+    map.UPDATED_AT,
+    new Date()
+  );
+
+  setCell_(
+    row,
+    map.UPDATED_BY,
+    session.username
+  );
+
+
+  range.setValues([row]);
+
+
+  writeAuditLog_(
+    session.userId,
+    session.username,
+    'EDIT',
+    'PASIEN',
+    pasienId,
+    'Mengubah data pasien ' +
+      patient.noRM
+  );
+
+
+  return {
+
+    success: true,
+
+    message:
+      'Data pasien berhasil diperbarui.'
+
+  };
+
+}
+
+
+/* =====================================================
+   UBAH STATUS PASIEN
+   ===================================================== */
+
+function updatePatientStatus(
+  token,
+  pasienId,
+  status
+) {
+
+  const session =
+    requireSession_(token);
+
+
+  pasienId =
+    String(
+      pasienId || ''
+    ).trim();
+
+
+  status =
+    String(
+      status || ''
+    )
+      .trim()
+      .toUpperCase();
+
+
+  if (
+    status !== 'AKTIF' &&
+    status !== 'NONAKTIF'
+  ) {
+
+    throw new Error(
+      'Status pasien tidak valid.'
+    );
+
+  }
+
+
+  const patient =
+    findPatientById_(
+      pasienId
+    );
+
+
+  if (!patient) {
+
+    throw new Error(
+      'Data pasien tidak ditemukan.'
+    );
+
+  }
+
+
+  const sheet =
+    getSheetByConfig('PASIEN');
+
+  const map =
+    getHeaderMap_(sheet);
+
+
+  sheet
+    .getRange(
+      patient._rowNumber,
+      map.STATUS + 1
+    )
+    .setValue(status);
+
+
+  if (
+    map.UPDATED_AT !== undefined
+  ) {
+
+    sheet
+      .getRange(
+        patient._rowNumber,
+        map.UPDATED_AT + 1
+      )
+      .setValue(
+        new Date()
+      );
+
+  }
+
+
+  if (
+    map.UPDATED_BY !== undefined
+  ) {
+
+    sheet
+      .getRange(
+        patient._rowNumber,
+        map.UPDATED_BY + 1
+      )
+      .setValue(
+        session.username
+      );
+
+  }
+
+
+  writeAuditLog_(
+    session.userId,
+    session.username,
+    'UBAH_STATUS',
+    'PASIEN',
+    pasienId,
+    'Status pasien ' +
+      patient.noRM +
+      ' diubah menjadi ' +
+      status
+  );
+
+
+  return {
+
+    success: true,
+
+    status:
+      status
+
+  };
+
+}
+
+
+/* =====================================================
+   STATISTIK PASIEN
+   ===================================================== */
+
+function getPatientStatistics(
+  token
+) {
+
+  requireSession_(token);
+
+
+  const sheet =
+    getSheetByConfig('PASIEN');
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  const result = {
+
+    total: 0,
+
+    aktif: 0,
+
+    nonaktif: 0,
+
+    perempuan: 0,
+
+    lakiLaki: 0,
+
+    baruBulanIni: 0
+
+  };
+
+
+  if (values.length < 2) {
+    return result;
+  }
+
+
+  const map =
+    getHeaderMap_(sheet);
+
+
+  const now =
+    new Date();
+
+
+  const currentMonth =
+    Utilities.formatDate(
+      now,
+      PMB_CONFIG.TIMEZONE ||
+        'Asia/Jakarta',
+      'yyyy-MM'
+    );
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    result.total++;
+
+
+    const status =
+      String(
+        values[i][
+          map.STATUS
+        ] || ''
+      ).toUpperCase();
+
+
+    if (
+      status === 'AKTIF'
+    ) {
+
+      result.aktif++;
+
+    }
+
+
+    if (
+      status === 'NONAKTIF'
+    ) {
+
+      result.nonaktif++;
+
+    }
+
+
+    const gender =
+      String(
+        values[i][
+          map.JENIS_KELAMIN
+        ] || ''
+      ).toUpperCase();
+
+
+    if (
+      gender === 'PEREMPUAN' ||
+      gender === 'P'
+    ) {
+
+      result.perempuan++;
+
+    }
+
+
+    if (
+      gender === 'LAKI-LAKI' ||
+      gender === 'LAKI LAKI' ||
+      gender === 'L'
+    ) {
+
+      result.lakiLaki++;
+
+    }
+
+
+    const created =
+      formatDate_(
+        values[i][
+          map.CREATED_AT
+        ]
+      );
+
+
+    if (
+      created &&
+      created.substring(0, 7) ===
+        currentMonth
+    ) {
+
+      result.baruBulanIni++;
+
+    }
+
+  }
+
+
+  return result;
+
+}
+
+
+/*******************************************************
+ * PMB SETIAWATI
+ * V1 TAHAP 4
+ * PENDAFTARAN + KUNJUNGAN + ANTRIAN
+ *******************************************************/
+
+
+/* =====================================================
+   TANGGAL HARI INI
+   ===================================================== */
+
+function getTodayString_() {
+
+  return Utilities.formatDate(
+    new Date(),
+    PMB_CONFIG.TIMEZONE ||
+      'Asia/Jakarta',
+    'yyyy-MM-dd'
+  );
+
+}
+
+
+/* =====================================================
+   SEARCH PASIEN UNTUK PENDAFTARAN
+   ===================================================== */
+
+function searchPatientsForRegistration(
+  token,
+  search
+) {
+
+  requireSession_(token);
+
+
+  search =
+    String(
+      search || ''
+    )
+      .trim()
+      .toLowerCase();
+
+
+  if (!search) {
+    return [];
+  }
+
+
+  const sheet =
+    getSheetByConfig('PASIEN');
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length < 2) {
+    return [];
+  }
+
+
+  const map =
+    getHeaderMap_(sheet);
+
+  const result = [];
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    const patient =
+      patientRowToObject_(
+        values[i],
+        map
+      );
+
+
+    if (
+      String(
+        patient.status || ''
+      ).toUpperCase() !==
+        'AKTIF'
+    ) {
+
+      continue;
+
+    }
+
+
+    const searchable = [
+
+      patient.noRM,
+
+      patient.nik,
+
+      patient.nama,
+
+      patient.noHP
+
+    ]
+      .join(' ')
+      .toLowerCase();
+
+
+    if (
+      searchable.indexOf(
+        search
+      ) === -1
+    ) {
+
+      continue;
+
+    }
+
+
+    result.push({
+
+      pasienId:
+        patient.pasienId,
+
+      noRM:
+        patient.noRM,
+
+      nama:
+        patient.nama,
+
+      nik:
+        patient.nik,
+
+      noHP:
+        patient.noHP,
+
+      jenisKelamin:
+        patient.jenisKelamin,
+
+      tanggalLahir:
+        patient.tanggalLahir
+
+    });
+
+
+    if (
+      result.length >= 20
+    ) {
+
+      break;
+
+    }
+
+  }
+
+
+  return result;
+
+}
+
+
+/* =====================================================
+   DETAIL PASIEN UNTUK PENDAFTARAN
+   ===================================================== */
+
+function getPatientForRegistration(
+  token,
+  pasienId
+) {
+
+  requireSession_(token);
+
+
+  const patient =
+    findPatientById_(
+      pasienId
+    );
+
+
+  if (!patient) {
+
+    throw new Error(
+      'Pasien tidak ditemukan.'
+    );
+
+  }
+
+
+  if (
+    String(
+      patient.status
+    ).toUpperCase() !==
+      'AKTIF'
+  ) {
+
+    throw new Error(
+      'Pasien berstatus NONAKTIF dan tidak dapat didaftarkan.'
+    );
+
+  }
+
+
+  return patient;
+
+}
+
+
+/* =====================================================
+   GENERATE ID KUNJUNGAN
+   ===================================================== */
+
+function generateKunjunganId_() {
+
+  return (
+
+    'KJ-' +
+
+    Utilities.formatDate(
+      new Date(),
+      PMB_CONFIG.TIMEZONE ||
+        'Asia/Jakarta',
+      'yyyyMMddHHmmss'
+    ) +
+
+    '-' +
+
+    Utilities.getUuid()
+      .substring(
+        0,
+        4
+      )
+      .toUpperCase()
+
+  );
+
+}
+
+
+/* =====================================================
+   GENERATE NOMOR ANTRIAN
+   ===================================================== */
+
+function generateQueueNumber_() {
+
+  const sheet =
+    getSheetByConfig('ANTRIAN');
+
+
+  const lastRow =
+    sheet.getLastRow();
+
+
+  if (lastRow < 2) {
+
+    return (
+
+      String(
+        PMB_CONFIG.QUEUE_PREFIX ||
+        'A'
+      ) +
+
+      '001'
+
+    );
+
+  }
+
+
+  const map =
+    getHeaderMap_(sheet);
+
+
+  const dateColumn =
+    map.TANGGAL + 1;
+
+
+  const numberColumn =
+    map.NOMOR_ANTRIAN + 1;
+
+
+  const rowCount =
+    lastRow - 1;
+
+
+  const dateValues =
+    sheet
+      .getRange(
+        2,
+        dateColumn,
+        rowCount,
+        1
+      )
+      .getValues();
+
+
+  const numberValues =
+    sheet
+      .getRange(
+        2,
+        numberColumn,
+        rowCount,
+        1
+      )
+      .getValues();
+
+
+  const today =
+    getTodayString_();
+
+
+  let maxNumber = 0;
+
+
+  for (
+    let i = 0;
+    i < rowCount;
+    i++
+  ) {
+
+    const dateValue =
+      formatDate_(
+        dateValues[i][0]
+      );
+
+
+    if (
+      !dateValue ||
+      dateValue.substring(0, 10) !==
+        today
+    ) {
+
+      continue;
+
+    }
+
+
+    const numberText =
+      String(
+        numberValues[i][0] || ''
+      );
+
+
+    const numeric =
+      parseInt(
+        numberText.replace(
+          /\D/g,
+          ''
+        ),
+        10
+      );
+
+
+    if (
+      !isNaN(numeric) &&
+      numeric > maxNumber
+    ) {
+
+      maxNumber =
+        numeric;
+
+    }
+
+  }
+
+
+  return (
+
+    String(
+      PMB_CONFIG.QUEUE_PREFIX ||
+      'A'
+    ) +
+
+    String(
+      maxNumber + 1
+    ).padStart(
+      3,
+      '0'
+    )
+
+  );
+
+}
+
+
+/* =====================================================
+   JENIS PELAYANAN
+   ===================================================== */
+
+function getServiceTypes(
+  token
+) {
+
+  requireSession_(token);
+
+
+  return [
+
+    {
+      code:
+        'PEMERIKSAAN_UMUM',
+      name:
+        'Pemeriksaan Umum'
+    },
+
+    {
+      code:
+        'KONSULTASI',
+      name:
+        'Konsultasi'
+    },
+
+    {
+      code:
+        'ANC',
+      name:
+        'Pemeriksaan ANC'
+    },
+
+    {
+      code:
+        'KB',
+      name:
+        'Pelayanan KB'
+    },
+
+    {
+      code:
+        'IMUNISASI',
+      name:
+        'Imunisasi'
+    },
+
+    {
+      code:
+        'LAINNYA',
+      name:
+        'Pelayanan Lainnya'
+    }
+
+  ];
+
+}
+
+
+/* =====================================================
+   PENDAFTARAN KUNJUNGAN
+   ===================================================== */
+
+function registerVisit(token, data) {
+
+  const session = requireSession_(token);
+
+  if (!data) {
+    throw new Error('Data pendaftaran tidak ditemukan.');
+  }
+
+  const pasienId = String(data.pasienId || '').trim();
+  const jenisPelayanan = String(data.jenisPelayanan || '').trim();
+  const keluhan = String(data.keluhan || '').trim();
+
+  if (!pasienId) {
+    throw new Error('Pasien belum dipilih.');
+  }
+
+  if (!jenisPelayanan) {
+    throw new Error('Jenis pelayanan wajib dipilih.');
+  }
+
+  const patient = findPatientById_(pasienId);
+
+  if (!patient) {
+    throw new Error('Data pasien tidak ditemukan.');
+  }
+
+  if (String(patient.status).toUpperCase() !== 'AKTIF') {
+    throw new Error('Pasien tidak aktif.');
+  }
+
+  const existing = findTodayVisitByPatient_(patient.noRM);
+
+  if (existing) {
+    throw new Error(
+      'Pasien ini sudah memiliki kunjungan hari ini dengan nomor antrian ' +
+      existing.nomorAntrian + '.'
+    );
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+
+    const kunjunganSheet = getSheetByConfig('KUNJUNGAN');
+    const antrianSheet = getSheetByConfig('ANTRIAN');
+
+    const kunjunganMap = getHeaderMap_(kunjunganSheet);
+    const antrianMap = getHeaderMap_(antrianSheet);
+
+    const kunjunganId = generateKunjunganId_();
+    const nomorAntrian = generateQueueNumber_();
+    const now = new Date();
+    const tanggal = getTodayString_();
+
+    /* ============================
+       KUNJUNGAN
+       ============================ */
+
+    const kunjunganRow =
+      new Array(kunjunganSheet.getLastColumn()).fill('');
+
+    setCell_(
+      kunjunganRow,
+      kunjunganMap.KUNJUNGAN_ID,
+      kunjunganId
+    );
+
+    setCell_(
+      kunjunganRow,
+      kunjunganMap.NO_RM,
+      patient.noRM
+    );
+
+    setCell_(
+      kunjunganRow,
+      kunjunganMap.PASIEN_ID,
+      patient.pasienId
+    );
+
+    setCell_(
+      kunjunganRow,
+      kunjunganMap.TANGGAL_KUNJUNGAN,
+      tanggal
+    );
+
+    setCell_(
+      kunjunganRow,
+      kunjunganMap.JENIS_KUNJUNGAN,
+      jenisPelayanan
+    );
+
+    setCell_(
+      kunjunganRow,
+      kunjunganMap.KELUHAN_UTAMA,
+      keluhan
+    );
+
+    setCell_(
+      kunjunganRow,
+      kunjunganMap.STATUS_KUNJUNGAN,
+      'TERDAFTAR'
+    );
+
+    setCell_(
+      kunjunganRow,
+      kunjunganMap.NO_ANTRIAN,
+      nomorAntrian
+    );
+
+    setCell_(
+      kunjunganRow,
+      kunjunganMap.CREATED_AT,
+      now
+    );
+
+    setCell_(
+      kunjunganRow,
+      kunjunganMap.CREATED_BY,
+      session.username
+    );
+
+    kunjunganSheet.appendRow(kunjunganRow);
+
+    /* ============================
+       ANTRIAN
+       ============================ */
+
+    const antrianRow =
+      new Array(antrianSheet.getLastColumn()).fill('');
+
+    setCell_(
+      antrianRow,
+      antrianMap.ANTRIAN_ID,
+      'AN-' +
+      Utilities.getUuid()
+        .substring(0, 8)
+        .toUpperCase()
+    );
+
+    setCell_(
+      antrianRow,
+      antrianMap.KUNJUNGAN_ID,
+      kunjunganId
+    );
+
+    setCell_(
+      antrianRow,
+      antrianMap.NO_RM,
+      patient.noRM
+    );
+
+    setCell_(
+      antrianRow,
+      antrianMap.NOMOR_ANTRIAN,
+      nomorAntrian
+    );
+
+    setCell_(
+      antrianRow,
+      antrianMap.TANGGAL,
+      tanggal
+    );
+
+    setCell_(
+      antrianRow,
+      antrianMap.JENIS_LAYANAN,
+      jenisPelayanan
+    );
+
+    setCell_(
+      antrianRow,
+      antrianMap.STATUS,
+      'MENUNGGU'
+    );
+
+    setCell_(
+      antrianRow,
+      antrianMap.WAKTU_DAFTAR,
+      now
+    );
+
+    antrianSheet.appendRow(antrianRow);
+
+    writeAuditLog_(
+      session.userId,
+      session.username,
+      'PENDAFTARAN',
+      'KUNJUNGAN',
+      kunjunganId,
+      'Pendaftaran pasien ' +
+      patient.noRM +
+      ' - ' +
+      patient.nama +
+      ' - Antrian ' +
+      nomorAntrian
+    );
+
+    return {
+      success: true,
+      kunjunganId: kunjunganId,
+      nomorAntrian: nomorAntrian,
+      noRM: patient.noRM,
+      nama: patient.nama,
+      jenisPelayanan: jenisPelayanan,
+      tanggal: tanggal,
+      message: 'Pendaftaran berhasil.'
+    };
+
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+/* =====================================================
+   CEK KUNJUNGAN HARI INI
+   ===================================================== */
+
+function findTodayVisitByPatient_(noRM) {
+
+  const sheet = getSheetByConfig('KUNJUNGAN');
+
+  const values = sheet.getDataRange().getValues();
+
+  if (values.length < 2) {
+    return null;
+  }
+
+  const map = getHeaderMap_(sheet);
+  const today = getTodayString_();
+
+  for (let i = 1; i < values.length; i++) {
+
+    const dateValue = formatDate_(
+      values[i][map.TANGGAL_KUNJUNGAN]
+    );
+
+    const patientRM = String(
+      values[i][map.NO_RM] || ''
+    ).trim();
+
+    const status = String(
+      values[i][map.STATUS_KUNJUNGAN] || ''
+    ).toUpperCase();
+
+    if (
+      dateValue &&
+      dateValue.substring(0, 10) === today &&
+      patientRM === String(noRM).trim() &&
+      status !== 'BATAL'
+    ) {
+
+      const kunjunganId =
+        values[i][map.KUNJUNGAN_ID] || '';
+
+      return {
+        kunjunganId: kunjunganId,
+        nomorAntrian:
+          getQueueNumberByVisitId_(kunjunganId)
+      };
+    }
+  }
+
+  return null;
+}
+
+
+/* =====================================================
+   CARI NOMOR ANTRIAN
+   ===================================================== */
+
+function getQueueNumberByVisitId_(
+  kunjunganId
+) {
+
+  const sheet =
+    getSheetByConfig(
+      'ANTRIAN'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length < 2) {
+    return '';
+  }
+
+
+  const map =
+    getHeaderMap_(sheet);
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    if (
+      String(
+        values[i][
+          map.KUNJUNGAN_ID
+        ] || ''
+      ) ===
+      String(kunjunganId)
+    ) {
+
+      return (
+        values[i][
+          map.NOMOR_ANTRIAN
+        ] || ''
+      );
+
+    }
+
+  }
+
+
+  return '';
+
+}
+
+
+/* =====================================================
+   GET ANTRIAN HARI INI
+   ===================================================== */
+
+function getTodayQueue(token) {
+
+  requireSession_(token);
+
+  const antrianSheet = getSheetByConfig('ANTRIAN');
+  const pasienSheet = getSheetByConfig('PASIEN');
+
+  const antrianValues =
+    antrianSheet.getDataRange().getValues();
+
+  const pasienValues =
+    pasienSheet.getDataRange().getValues();
+
+  if (antrianValues.length < 2) {
+    return [];
+  }
+
+  const antrianMap =
+    getHeaderMap_(antrianSheet);
+
+  const pasienMap =
+    getHeaderMap_(pasienSheet);
+
+  const today = getTodayString_();
+
+  /* INDEX PASIEN BERDASARKAN NO RM */
+  const pasienByRM = {};
+
+  for (let i = 1; i < pasienValues.length; i++) {
+
+    const noRM = String(
+      pasienValues[i][pasienMap.NO_RM] || ''
+    ).trim();
+
+    if (!noRM) continue;
+
+    pasienByRM[noRM] = {
+      pasienId:
+        pasienMap.PASIEN_ID !== undefined
+          ? String(
+              pasienValues[i][pasienMap.PASIEN_ID] || ''
+            )
+          : '',
+
+      nama:
+        pasienMap.NAMA_LENGKAP !== undefined
+          ? String(
+              pasienValues[i][pasienMap.NAMA_LENGKAP] || ''
+            )
+          : ''
+    };
+  }
+
+  const result = [];
+
+  for (let i = 1; i < antrianValues.length; i++) {
+
+    const dateValue = formatDate_(
+      antrianValues[i][antrianMap.TANGGAL]
+    );
+
+    if (
+      !dateValue ||
+      dateValue.substring(0, 10) !== today
+    ) {
+      continue;
+    }
+
+    const noRM = String(
+      antrianValues[i][antrianMap.NO_RM] || ''
+    ).trim();
+
+    const pasien = pasienByRM[noRM] || {};
+
+    result.push({
+
+      antrianId:
+        antrianValues[i][antrianMap.ANTRIAN_ID] || '',
+
+      nomorAntrian:
+        antrianValues[i][antrianMap.NOMOR_ANTRIAN] || '',
+
+      kunjunganId:
+        antrianValues[i][antrianMap.KUNJUNGAN_ID] || '',
+
+      noRM: noRM,
+
+      pasienId:
+        pasien.pasienId || '',
+
+      nama:
+        pasien.nama || '',
+
+      jenisPelayanan:
+        antrianValues[i][antrianMap.JENIS_LAYANAN] || '',
+
+      status:
+        antrianValues[i][antrianMap.STATUS] || '',
+
+      waktuPanggil:
+        antrianMap.WAKTU_PANGGIL !== undefined
+          ? formatDateTime_(
+              antrianValues[i][antrianMap.WAKTU_PANGGIL]
+            )
+          : '',
+
+      waktuSelesai:
+        antrianMap.WAKTU_SELESAI !== undefined
+          ? formatDateTime_(
+              antrianValues[i][antrianMap.WAKTU_SELESAI]
+            )
+          : '',
+
+      _rowNumber: i + 1
+    });
+  }
+
+  return result;
+}
+
+/* =====================================================
+   FORMAT DATETIME
+   ===================================================== */
+
+function formatDateTime_(
+  value
+) {
+
+  if (!value) {
+    return '';
+  }
+
+
+  if (
+    Object.prototype.toString.call(value) ===
+      '[object Date]'
+  ) {
+
+    return Utilities.formatDate(
+      value,
+      PMB_CONFIG.TIMEZONE ||
+        'Asia/Jakarta',
+      'dd/MM/yyyy HH:mm:ss'
+    );
+
+  }
+
+
+  return String(value);
+
+}
+
+
+/* =====================================================
+   UPDATE STATUS ANTRIAN
+   ===================================================== */
+
+function updateQueueStatus(
+  token,
+  antrianId,
+  status
+) {
+
+  const session =
+    requireSession_(token);
+
+
+  antrianId =
+    String(
+      antrianId || ''
+    ).trim();
+
+
+  status =
+    String(
+      status || ''
+    )
+      .trim()
+      .toUpperCase();
+
+
+  const allowed = [
+
+    'MENUNGGU',
+
+    'DIPANGGIL',
+
+    'DILAYANI',
+
+    'SELESAI',
+
+    'BATAL'
+
+  ];
+
+
+  if (
+    allowed.indexOf(status) === -1
+  ) {
+
+    throw new Error(
+      'Status antrian tidak valid.'
+    );
+
+  }
+
+
+  const sheet =
+    getSheetByConfig(
+      'ANTRIAN'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length < 2) {
+
+    throw new Error(
+      'Data antrian belum tersedia.'
+    );
+
+  }
+
+
+  const map =
+    getHeaderMap_(sheet);
+
+
+  let rowNumber = -1;
+
+  let queue = null;
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    if (
+      String(
+        values[i][
+          map.ANTRIAN_ID
+        ] || ''
+      ) ===
+      antrianId
+    ) {
+
+      rowNumber =
+        i + 1;
+
+
+      queue = {
+
+        nomorAntrian:
+          values[i][
+            map.NOMOR_ANTRIAN
+          ] || '',
+
+        noRM:
+          values[i][
+            map.NO_RM
+          ] || '',
+
+        nama:
+          values[i][
+            map.NAMA_PASIEN
+          ] || '',
+
+        status:
+          values[i][
+            map.STATUS
+          ] || ''
+
+      };
+
+
+      break;
+
+    }
+
+  }
+
+
+  if (rowNumber === -1) {
+
+    throw new Error(
+      'Data antrian tidak ditemukan.'
+    );
+
+  }
+
+
+  const currentStatus =
+    String(
+      queue.status || ''
+    ).toUpperCase();
+
+
+  if (
+    status === 'DILAYANI' &&
+    currentStatus !== 'DIPANGGIL'
+  ) {
+
+    throw new Error(
+      'Pasien harus dipanggil terlebih dahulu.'
+    );
+
+  }
+
+
+  if (
+    status === 'SELESAI' &&
+    currentStatus !== 'DILAYANI'
+  ) {
+
+    throw new Error(
+      'Pasien harus berstatus DILAYANI.'
+    );
+
+  }
+
+
+  if (
+    status === 'BATAL' &&
+    (
+      currentStatus ===
+        'SELESAI' ||
+      currentStatus ===
+        'BATAL'
+    )
+  ) {
+
+    throw new Error(
+      'Antrian sudah selesai atau dibatalkan.'
+    );
+
+  }
+
+
+  sheet
+    .getRange(
+      rowNumber,
+      map.STATUS + 1
+    )
+    .setValue(status);
+
+
+  if (
+    status === 'DIPANGGIL' &&
+    map.WAKTU_PANGGIL !==
+      undefined
+  ) {
+
+    sheet
+      .getRange(
+        rowNumber,
+        map.WAKTU_PANGGIL + 1
+      )
+      .setValue(
+        new Date()
+      );
+
+  }
+
+
+  if (
+    status === 'SELESAI' &&
+    map.WAKTU_SELESAI !==
+      undefined
+  ) {
+
+    sheet
+      .getRange(
+        rowNumber,
+        map.WAKTU_SELESAI + 1
+      )
+      .setValue(
+        new Date()
+      );
+
+  }
+
+
+  if (
+    map.UPDATED_AT !==
+      undefined
+  ) {
+
+    sheet
+      .getRange(
+        rowNumber,
+        map.UPDATED_AT + 1
+      )
+      .setValue(
+        new Date()
+      );
+
+  }
+
+
+  if (
+    map.UPDATED_BY !==
+      undefined
+  ) {
+
+    sheet
+      .getRange(
+        rowNumber,
+        map.UPDATED_BY + 1
+      )
+      .setValue(
+        session.username
+      );
+
+  }
+
+
+  updateVisitStatusByQueue_(
+    values[
+      rowNumber - 1
+    ][
+      map.KUNJUNGAN_ID
+    ],
+    status
+  );
+
+
+  writeAuditLog_(
+    session.userId,
+    session.username,
+    'UBAH_STATUS',
+    'ANTRIAN',
+    antrianId,
+    'Antrian ' +
+      queue.nomorAntrian +
+      ' pasien ' +
+      queue.nama +
+      ' diubah menjadi ' +
+      status
+  );
+
+
+  return {
+
+    success: true,
+
+    status:
+      status
+
+  };
+
+}
+
+
+/* =====================================================
+   UPDATE STATUS KUNJUNGAN
+   ===================================================== */
+
+function updateVisitStatusByQueue_(
+  kunjunganId,
+  queueStatus
+) {
+
+  if (!kunjunganId) {
+    return;
+  }
+
+
+  const sheet =
+    getSheetByConfig(
+      'KUNJUNGAN'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length < 2) {
+    return;
+  }
+
+
+  const map =
+    getHeaderMap_(sheet);
+
+
+  let status = '';
+
+
+  switch (queueStatus) {
+
+    case 'MENUNGGU':
+
+      status =
+        'TERDAFTAR';
+
+      break;
+
+
+    case 'DIPANGGIL':
+
+      status =
+        'DIPANGGIL';
+
+      break;
+
+
+    case 'DILAYANI':
+
+      status =
+        'DILAYANI';
+
+      break;
+
+
+    case 'SELESAI':
+
+      status =
+        'SELESAI';
+
+      break;
+
+
+    case 'BATAL':
+
+      status =
+        'BATAL';
+
+      break;
+
+  }
+
+
+  if (!status) {
+    return;
+  }
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    if (
+      String(
+        values[i][
+          map.KUNJUNGAN_ID
+        ] || ''
+      ) ===
+      String(kunjunganId)
+    ) {
+
+      sheet
+        .getRange(
+          i + 1,
+          map.STATUS + 1
+        )
+        .setValue(status);
+
+      return;
+
+    }
+
+  }
+
+}
+
+
+/* =====================================================
+   PANGGIL PASIEN BERIKUTNYA
+   ===================================================== */
+
+function callNextQueue(
+  token
+) {
+
+  requireSession_(token);
+
+
+  const queue =
+    getTodayQueue(token);
+
+
+  const next =
+    queue.find(
+      function(item) {
+
+        return (
+          String(
+            item.status
+          ).toUpperCase() ===
+            'MENUNGGU'
+        );
+
+      }
+    );
+
+
+  if (!next) {
+
+    return {
+
+      success:
+        false,
+
+      message:
+        'Tidak ada pasien yang menunggu.'
+
+    };
+
+  }
+
+
+  updateQueueStatus(
+    token,
+    next.antrianId,
+    'DIPANGGIL'
+  );
+
+
+  return {
+
+    success:
+      true,
+
+    nomorAntrian:
+      next.nomorAntrian,
+
+    nama:
+      next.nama,
+
+    noRM:
+      next.noRM,
+
+    status:
+      'DIPANGGIL'
+
+  };
+
+}
+
+
+/* =====================================================
+   GET ANTRIAN AKTIF
+   ===================================================== */
+
+function getActiveQueue(
+  token
+) {
+
+  const queue =
+    getTodayQueue(token);
+
+
+  return queue.filter(
+    function(item) {
+
+      return [
+
+        'MENUNGGU',
+
+        'DIPANGGIL',
+
+        'DILAYANI'
+
+      ].indexOf(
+        String(
+          item.status
+        ).toUpperCase()
+      ) !== -1;
+
+    }
+  );
+
+}
+
+
+/*******************************************************
+ * PMB SETIAWATI
+ * V1 TAHAP 5 / TAHAP 6
+ * PEMERIKSAAN + REKAM MEDIS
+ *******************************************************/
+
+
+/* =====================================================
+   GENERATE ID REKAM MEDIS
+   ===================================================== */
+
+function generateRekamMedisId_() {
+
+  const sheet =
+    getSheetByConfig(
+      'REKAM_MEDIS'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length <= 1) {
+
+    return 'RMED-000001';
+
+  }
+
+
+  const headers =
+    values[0];
+
+
+  const map =
+    getHeaderMap_(
+      headers
+    );
+
+
+  let max = 0;
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    const value =
+      String(
+        map.REKAM_MEDIS_ID !==
+        undefined
+          ? values[i][
+              map.REKAM_MEDIS_ID
+            ]
+          : ''
+      ).trim();
+
+
+    if (!value) {
+      continue;
+    }
+
+
+    const match =
+      value.match(
+        /(\d+)$/
+      );
+
+
+    if (match) {
+
+      const number =
+        parseInt(
+          match[1],
+          10
+        );
+
+
+      if (
+        !isNaN(number) &&
+        number > max
+      ) {
+
+        max =
+          number;
+
+      }
+
+    }
+
+  }
+
+
+  return (
+    'RMED-' +
+    String(
+      max + 1
+    ).padStart(
+      6,
+      '0'
+    )
+  );
+
+}
+
+
+/* =====================================================
+   PASIEN YANG SEDANG DILAYANI
+   ===================================================== */
+
+function getPatientsForExamination(
+  token
+) {
+
+  requireSession_(token);
+
+
+  const sheet =
+    getSheetByConfig(
+      'ANTRIAN'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length <= 1) {
+    return [];
+  }
+
+
+  const headers =
+    values[0];
+
+
+  const map =
+    getHeaderMap_(
+      headers
+    );
+
+
+  const result = [];
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    const row =
+      values[i];
+
+
+    const status =
+      String(
+        row[map.STATUS] || ''
+      )
+        .trim()
+        .toUpperCase();
+
+
+    if (
+      status !== 'DILAYANI'
+    ) {
+
+      continue;
+
+    }
+
+
+    result.push({
+
+      antrianId:
+        String(
+          row[
+            map.ANTRIAN_ID
+          ] || ''
+        ),
+
+      nomorAntrian:
+        String(
+          row[
+            map.NOMOR_ANTRIAN
+          ] || ''
+        ),
+
+      kunjunganId:
+        String(
+          row[
+            map.KUNJUNGAN_ID
+          ] || ''
+        ),
+
+      noRM:
+        String(
+          row[
+            map.NO_RM
+          ] || ''
+        ),
+
+      pasienId:
+        String(
+          row[
+            map.PASIEN_ID
+          ] || ''
+        ),
+
+      namaPasien:
+        String(
+          row[
+            map.NAMA_PASIEN
+          ] || ''
+        ),
+
+      jenisPelayanan:
+        String(
+          row[
+            map.JENIS_PELAYANAN
+          ] || ''
+        ),
+
+      status:
+        status
+
+    });
+
+  }
+
+
+  result.sort(
+    function(a, b) {
+
+      return a.nomorAntrian
+        .localeCompare(
+          b.nomorAntrian,
+          undefined,
+          {
+            numeric: true
+          }
+        );
+
+    }
+  );
+
+
+  return result;
+
+}
+
+
+/* =====================================================
+   DETAIL PEMERIKSAAN
+   ===================================================== */
+
+function getExaminationData(
+  token,
+  kunjunganId
+) {
+
+  requireSession_(token);
+
+
+  kunjunganId =
+    String(
+      kunjunganId || ''
+    ).trim();
+
+
+  if (!kunjunganId) {
+
+    throw new Error(
+      'Kunjungan tidak ditemukan.'
+    );
+
+  }
+
+
+  const pasienSheet =
+    getSheetByConfig(
+      'PASIEN'
+    );
+
+
+  const kunjunganSheet =
+    getSheetByConfig(
+      'KUNJUNGAN'
+    );
+
+
+  const antrianSheet =
+    getSheetByConfig(
+      'ANTRIAN'
+    );
+
+
+  const pasienValues =
+    pasienSheet
+      .getDataRange()
+      .getValues();
+
+
+  const kunjunganValues =
+    kunjunganSheet
+      .getDataRange()
+      .getValues();
+
+
+  const antrianValues =
+    antrianSheet
+      .getDataRange()
+      .getValues();
+
+
+  if (
+    kunjunganValues.length <= 1
+  ) {
+
+    throw new Error(
+      'Data kunjungan tidak ditemukan.'
+    );
+
+  }
+
+
+  const pasienMap =
+    getHeaderMap_(
+      pasienValues[0]
+    );
+
+
+  const kunjunganMap =
+    getHeaderMap_(
+      kunjunganValues[0]
+    );
+
+
+  const antrianMap =
+    getHeaderMap_(
+      antrianValues[0]
+    );
+
+
+  let kunjungan =
+    null;
+
+
+  for (
+    let i = 1;
+    i < kunjunganValues.length;
+    i++
+  ) {
+
+    const row =
+      kunjunganValues[i];
+
+
+    if (
+      String(
+        row[
+          kunjunganMap.KUNJUNGAN_ID
+        ] || ''
+      ) ===
+      kunjunganId
+    ) {
+
+      kunjungan =
+        row;
+
+      break;
+
+    }
+
+  }
+
+
+  if (!kunjungan) {
+
+    throw new Error(
+      'Data kunjungan tidak ditemukan.'
+    );
+
+  }
+
+
+  const pasienId =
+    String(
+      kunjungan[
+        kunjunganMap.PASIEN_ID
+      ] || ''
+    );
+
+
+  let pasien =
+    null;
+
+
+  for (
+    let i = 1;
+    i < pasienValues.length;
+    i++
+  ) {
+
+    const row =
+      pasienValues[i];
+
+
+    if (
+      String(
+        row[
+          pasienMap.PASIEN_ID
+        ] || ''
+      ) ===
+      pasienId
+    ) {
+
+      pasien =
+        row;
+
+      break;
+
+    }
+
+  }
+
+
+  if (!pasien) {
+
+    throw new Error(
+      'Data pasien tidak ditemukan.'
+    );
+
+  }
+
+
+  let antrian =
+    null;
+
+
+  for (
+    let i = 1;
+    i < antrianValues.length;
+    i++
+  ) {
+
+    const row =
+      antrianValues[i];
+
+
+    if (
+      String(
+        row[
+          antrianMap.KUNJUNGAN_ID
+        ] || ''
+      ) ===
+      kunjunganId
+    ) {
+
+      antrian =
+        row;
+
+      break;
+
+    }
+
+  }
+
+
+  const existingMedicalRecord =
+    findMedicalRecordByVisit_(
+      kunjunganId
+    );
+
+
+  /*
+   * Struktur pasien menggunakan NO_HP,
+   * bukan TELEPON.
+   */
+
+  return {
+
+    kunjungan: {
+
+      kunjunganId:
+        String(
+          kunjungan[
+            kunjunganMap.KUNJUNGAN_ID
+          ] || ''
+        ),
+
+      tanggal:
+        String(
+          kunjungan[
+            kunjunganMap.TANGGAL
+          ] || ''
+        ),
+
+      noRM:
+        String(
+          kunjungan[
+            kunjunganMap.NO_RM
+          ] || ''
+        ),
+
+      pasienId:
+        String(
+          kunjungan[
+            kunjunganMap.PASIEN_ID
+          ] || ''
+        ),
+
+      namaPasien:
+        String(
+          kunjungan[
+            kunjunganMap.NAMA_PASIEN
+          ] || ''
+        ),
+
+      jenisPelayanan:
+        String(
+          kunjungan[
+            kunjunganMap.JENIS_PELAYANAN
+          ] || ''
+        ),
+
+      keluhan:
+        String(
+          kunjungan[
+            kunjunganMap.KELUHAN
+          ] || ''
+        ),
+
+      status:
+        String(
+          kunjungan[
+            kunjunganMap.STATUS
+          ] || ''
+        )
+
+    },
+
+
+    pasien: {
+
+      pasienId:
+        String(
+          pasien[
+            pasienMap.PASIEN_ID
+          ] || ''
+        ),
+
+      noRM:
+        String(
+          pasien[
+            pasienMap.NO_RM
+          ] || ''
+        ),
+
+      nik:
+        String(
+          pasien[
+            pasienMap.NIK
+          ] || ''
+        ),
+
+      nama:
+        String(
+          pasien[
+            pasienMap.NAMA_LENGKAP
+          ] || ''
+        ),
+
+      tempatLahir:
+        String(
+          pasien[
+            pasienMap.TEMPAT_LAHIR
+          ] || ''
+        ),
+
+      tanggalLahir:
+        pasien[
+          pasienMap.TANGGAL_LAHIR
+        ]
+          ? formatDate_(
+              pasien[
+                pasienMap.TANGGAL_LAHIR
+              ]
+            )
+          : '',
+
+      jenisKelamin:
+        String(
+          pasien[
+            pasienMap.JENIS_KELAMIN
+          ] || ''
+        ),
+
+      alamat:
+        String(
+          pasien[
+            pasienMap.ALAMAT
+          ] || ''
+        ),
+
+      telepon:
+        String(
+          pasien[
+            pasienMap.NO_HP
+          ] || ''
+        ),
+
+      golonganDarah:
+        String(
+          pasien[
+            pasienMap.GOLONGAN_DARAH
+          ] || ''
+        )
+
+    },
+
+
+    antrian:
+      antrian
+        ? {
+
+            antrianId:
+              String(
+                antrian[
+                  antrianMap.ANTRIAN_ID
+                ] || ''
+              ),
+
+            nomorAntrian:
+              String(
+                antrian[
+                  antrianMap.NOMOR_ANTRIAN
+                ] || ''
+              ),
+
+            status:
+              String(
+                antrian[
+                  antrianMap.STATUS
+                ] || ''
+              )
+
+          }
+
+        : null,
+
+
+    rekamMedis:
+      existingMedicalRecord
+
+  };
+
+}
+
+
+/* =====================================================
+   CARI REKAM MEDIS BERDASARKAN KUNJUNGAN
+   ===================================================== */
+
+function findMedicalRecordByVisit_(
+  kunjunganId
+) {
+
+  const sheet =
+    getSheetByConfig(
+      'REKAM_MEDIS'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length <= 1) {
+    return null;
+  }
+
+
+  const map =
+    getHeaderMap_(
+      values[0]
+    );
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    const row =
+      values[i];
+
+
+    if (
+      String(
+        row[
+          map.KUNJUNGAN_ID
+        ] || ''
+      ) ===
+      String(kunjunganId)
+    ) {
+
+      return {
+
+        rekamMedisId:
+          String(
+            row[
+              map.REKAM_MEDIS_ID
+            ] || ''
+          ),
+
+        anamnesis:
+          String(
+            row[
+              map.ANAMNESIS
+            ] || ''
+          ),
+
+        tekananDarah:
+          String(
+            row[
+              map.TEKANAN_DARAH
+            ] || ''
+          ),
+
+        nadi:
+          String(
+            row[
+              map.NADI
+            ] || ''
+          ),
+
+        suhu:
+          String(
+            row[
+              map.SUHU
+            ] || ''
+          ),
+
+        respirasi:
+          String(
+            row[
+              map.RESPIRASI
+            ] || ''
+          ),
+
+        beratBadan:
+          String(
+            row[
+              map.BERAT_BADAN
+            ] || ''
+          ),
+
+        tinggiBadan:
+          String(
+            row[
+              map.TINGGI_BADAN
+            ] || ''
+          ),
+
+        pemeriksaanFisik:
+          String(
+            row[
+              map.PEMERIKSAAN_FISIK
+            ] || ''
+          ),
+
+        diagnosis:
+          String(
+            row[
+              map.DIAGNOSIS
+            ] || ''
+          ),
+
+        tindakan:
+          String(
+            row[
+              map.TINDAKAN
+            ] || ''
+          ),
+
+        catatanBidan:
+          String(
+            row[
+              map.CATATAN_BIDAN
+            ] || ''
+          )
+
+      };
+
+    }
+
+  }
+
+
+  return null;
+
+}
+
+
+/* =====================================================
+   MASTER TINDAKAN
+   ===================================================== */
+
+function getMedicalActions(
+  token
+) {
+
+  requireSession_(token);
+
+
+  const sheet =
+    getSheetByConfig(
+      'TINDAKAN'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length <= 1) {
+    return [];
+  }
+
+
+  const map =
+    getHeaderMap_(
+      values[0]
+    );
+
+
+  const result = [];
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    const row =
+      values[i];
+
+
+    result.push({
+
+      id:
+        String(
+          row[
+            map.TINDAKAN_ID
+          ] || ''
+        ),
+
+      nama:
+        String(
+          row[
+            map.NAMA_TINDAKAN
+          ] || ''
+        ),
+
+      kategori:
+        String(
+          row[
+            map.KATEGORI
+          ] || ''
+        ),
+
+      tarif:
+        Number(
+          row[
+            map.TARIF
+          ] || 0
+        )
+
+    });
+
+  }
+
+
+  return result;
+
+}
+
+
+/* =====================================================
+   HELPER:
+   CEK STATUS ANTRIAN BERDASARKAN KUNJUNGAN
+   ===================================================== */
+
+function getQueueStatusByVisitId_(
+  kunjunganId
+) {
+
+  const sheet =
+    getSheetByConfig(
+      'ANTRIAN'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length <= 1) {
+    return '';
+  }
+
+
+  const map =
+    getHeaderMap_(
+      values[0]
+    );
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    if (
+      String(
+        values[i][
+          map.KUNJUNGAN_ID
+        ] || ''
+      ) ===
+      String(kunjunganId)
+    ) {
+
+      return String(
+        values[i][
+          map.STATUS
+        ] || ''
+      )
+        .trim()
+        .toUpperCase();
+
+    }
+
+  }
+
+
+  return '';
+
+}
+
+
+/* =====================================================
+   SIMPAN REKAM MEDIS
+   ===================================================== */
+
+function saveMedicalRecord(
+  token,
+  data
+) {
+
+  const session =
+    requireSession_(token);
+
+
+  data =
+    data || {};
+
+
+  const kunjunganId =
+    String(
+      data.kunjunganId || ''
+    ).trim();
+
+
+  if (!kunjunganId) {
+
+    throw new Error(
+      'Kunjungan belum dipilih.'
+    );
+
+  }
+
+
+  const anamnesis =
+    String(
+      data.anamnesis || ''
+    ).trim();
+
+
+  const tekananDarah =
+    String(
+      data.tekananDarah || ''
+    ).trim();
+
+
+  const nadi =
+    String(
+      data.nadi || ''
+    ).trim();
+
+
+  const suhu =
+    String(
+      data.suhu || ''
+    ).trim();
+
+
+  const respirasi =
+    String(
+      data.respirasi || ''
+    ).trim();
+
+
+  const beratBadan =
+    String(
+      data.beratBadan || ''
+    ).trim();
+
+
+  const tinggiBadan =
+    String(
+      data.tinggiBadan || ''
+    ).trim();
+
+
+  const pemeriksaanFisik =
+    String(
+      data.pemeriksaanFisik || ''
+    ).trim();
+
+
+  const diagnosis =
+    String(
+      data.diagnosis || ''
+    ).trim();
+
+
+  const tindakan =
+    String(
+      data.tindakan || ''
+    ).trim();
+
+
+  const catatanBidan =
+    String(
+      data.catatanBidan || ''
+    ).trim();
+
+
+  if (!anamnesis) {
+
+    throw new Error(
+      'Anamnesis wajib diisi.'
+    );
+
+  }
+
+
+  if (!diagnosis) {
+
+    throw new Error(
+      'Diagnosis wajib diisi.'
+    );
+
+  }
+
+
+  const lock =
+    LockService.getScriptLock();
+
+
+  lock.waitLock(30000);
+
+
+  try {
+
+    /* ---------------------------------------------
+       CEK DUPLIKAT REKAM MEDIS
+       --------------------------------------------- */
+
+    const existing =
+      findMedicalRecordByVisit_(
+        kunjunganId
+      );
+
+
+    if (existing) {
+
+      throw new Error(
+        'Rekam medis untuk kunjungan ini sudah tersimpan.'
+      );
+
+    }
+
+
+    /* ---------------------------------------------
+       AMBIL DATA PEMERIKSAAN
+       --------------------------------------------- */
+
+    const dataPemeriksaan =
+      getExaminationData(
+        token,
+        kunjunganId
+      );
+
+
+    if (
+      !dataPemeriksaan.kunjungan
+    ) {
+
+      throw new Error(
+        'Kunjungan tidak ditemukan.'
+      );
+
+    }
+
+
+    /* =================================================
+       PERBAIKAN V1 TAHAP 6
+       SINKRONISASI STATUS KUNJUNGAN + ANTRIAN
+       ================================================= */
+
+    let statusKunjungan =
+      String(
+        dataPemeriksaan
+          .kunjungan
+          .status || ''
+      )
+        .trim()
+        .toUpperCase();
+
+
+    let statusAntrian =
+      getQueueStatusByVisitId_(
+        kunjunganId
+      );
+
+
+    /*
+     * Kondisi normal:
+     *
+     * ANTRIAN   = DILAYANI
+     * KUNJUNGAN = DILAYANI
+     *
+     * Tetapi jika ANTRIAN sudah DILAYANI
+     * sedangkan KUNJUNGAN belum DILAYANI,
+     * sistem akan memperbaiki status KUNJUNGAN.
+     */
+
+    if (
+      statusAntrian === 'DILAYANI' &&
+      statusKunjungan !== 'DILAYANI'
+    ) {
+
+      updateVisitStatusDirect_(
+        kunjunganId,
+        'DILAYANI',
+        session.username || ''
+      );
+
+
+      statusKunjungan =
+        'DILAYANI';
+
+    }
+
+
+    /*
+     * Setelah sinkronisasi, pemeriksaan
+     * tetap wajib berasal dari kunjungan
+     * yang benar-benar DILAYANI.
+     */
+
+    if (
+      statusKunjungan !==
+      'DILAYANI'
+    ) {
+
+      throw new Error(
+        'Pemeriksaan hanya dapat disimpan untuk kunjungan dengan status DILAYANI. ' +
+        'Silakan pastikan pasien sudah berstatus DILAYANI pada menu Antrian.'
+      );
+
+    }
+
+
+    /*
+     * Jika status ANTRIAN tidak DILAYANI,
+     * jangan memaksa penyimpanan.
+     *
+     * Ini menjaga alur:
+     * MENUNGGU -> DIPANGGIL -> DILAYANI
+     */
+
+    if (
+      statusAntrian !==
+      'DILAYANI'
+    ) {
+
+      throw new Error(
+        'Pasien belum berstatus DILAYANI pada Antrian. ' +
+        'Silakan ubah status pasien menjadi DILAYANI terlebih dahulu.'
+      );
+
+    }
+
+
+    /* ---------------------------------------------
+       SHEET REKAM MEDIS
+       --------------------------------------------- */
+
+    const sheet =
+      getSheetByConfig(
+        'REKAM_MEDIS'
+      );
+
+
+    const headers =
+      sheet
+        .getRange(
+          1,
+          1,
+          1,
+          sheet.getLastColumn()
+        )
+        .getValues()[0];
+
+
+    const map =
+      getHeaderMap_(
+        headers
+      );
+
+
+    const row =
+      new Array(
+        headers.length
+      ).fill('');
+
+
+    const now =
+      new Date();
+
+
+    const set =
+      function(
+        header,
+        value
+      ) {
+
+        if (
+          map[header] !==
+          undefined
+        ) {
+
+          row[
+            map[header]
+          ] = value;
+
+        }
+
+      };
+
+
+    const rekamMedisId =
+      generateRekamMedisId_();
+
+
+    /* ---------------------------------------------
+       IDENTITAS
+       --------------------------------------------- */
+
+    set(
+      'REKAM_MEDIS_ID',
+      rekamMedisId
+    );
+
+
+    set(
+      'KUNJUNGAN_ID',
+      kunjunganId
+    );
+
+
+    set(
+      'TANGGAL',
+      now
+    );
+
+
+    set(
+      'NO_RM',
+      dataPemeriksaan
+        .pasien
+        .noRM
+    );
+
+
+    set(
+      'PASIEN_ID',
+      dataPemeriksaan
+        .pasien
+        .pasienId
+    );
+
+
+    set(
+      'NAMA_PASIEN',
+      dataPemeriksaan
+        .pasien
+        .nama
+    );
+
+
+    /* ---------------------------------------------
+       DATA PEMERIKSAAN
+       --------------------------------------------- */
+
+    set(
+      'ANAMNESIS',
+      anamnesis
+    );
+
+
+    set(
+      'TEKANAN_DARAH',
+      tekananDarah
+    );
+
+
+    set(
+      'NADI',
+      nadi
+    );
+
+
+    set(
+      'SUHU',
+      suhu
+    );
+
+
+    set(
+      'RESPIRASI',
+      respirasi
+    );
+
+
+    set(
+      'BERAT_BADAN',
+      beratBadan
+    );
+
+
+    set(
+      'TINGGI_BADAN',
+      tinggiBadan
+    );
+
+
+    set(
+      'PEMERIKSAAN_FISIK',
+      pemeriksaanFisik
+    );
+
+
+    set(
+      'DIAGNOSIS',
+      diagnosis
+    );
+
+
+    set(
+      'TINDAKAN',
+      tindakan
+    );
+
+
+    set(
+      'CATATAN_BIDAN',
+      catatanBidan
+    );
+
+
+    /* ---------------------------------------------
+       AUDIT DATA
+       --------------------------------------------- */
+
+    set(
+      'CREATED_AT',
+      now
+    );
+
+
+    set(
+      'CREATED_BY',
+      session.username || ''
+    );
+
+
+    set(
+      'UPDATED_AT',
+      now
+    );
+
+
+    set(
+      'UPDATED_BY',
+      session.username || ''
+    );
+
+
+    /* ---------------------------------------------
+       SIMPAN REKAM MEDIS
+       --------------------------------------------- */
+
+    sheet.appendRow(
+      row
+    );
+
+
+    /* =================================================
+       SETELAH REKAM MEDIS BERHASIL DISIMPAN
+       ================================================= */
+
+    updateQueueStatusByVisitId_(
+      kunjunganId,
+      'SELESAI',
+      session.username || ''
+    );
+
+
+    updateVisitStatusDirect_(
+      kunjunganId,
+      'SELESAI',
+      session.username || ''
+    );
+
+
+    /* ---------------------------------------------
+       AUDIT LOG
+       --------------------------------------------- */
+
+    writeAuditLog_(
+      session.userId,
+      session.username || '',
+      'TAMBAH_REKAM_MEDIS',
+      'REKAM_MEDIS',
+      rekamMedisId,
+      'Rekam medis disimpan untuk kunjungan ' +
+        kunjunganId
+    );
+
+
+    return {
+
+      success:
+        true,
+
+      message:
+        'Rekam medis berhasil disimpan.',
+
+      rekamMedisId:
+        rekamMedisId,
+
+      kunjunganId:
+        kunjunganId,
+
+      noRM:
+        dataPemeriksaan
+          .pasien
+          .noRM,
+
+      namaPasien:
+        dataPemeriksaan
+          .pasien
+          .nama
+
+    };
+
+
+  } finally {
+
+    lock.releaseLock();
+
+  }
+
+}
+
+
+/* =====================================================
+   UPDATE STATUS ANTRIAN BERDASARKAN KUNJUNGAN
+   ===================================================== */
+
+function updateQueueStatusByVisitId_(
+  kunjunganId,
+  status,
+  username
+) {
+
+  const sheet =
+    getSheetByConfig(
+      'ANTRIAN'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length <= 1) {
+    return;
+  }
+
+
+  const map =
+    getHeaderMap_(
+      values[0]
+    );
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    const row =
+      values[i];
+
+
+    if (
+      String(
+        row[
+          map.KUNJUNGAN_ID
+        ] || ''
+      ) ===
+      String(kunjunganId)
+    ) {
+
+      const rowNumber =
+        i + 1;
+
+
+      if (
+        map.STATUS !==
+        undefined
+      ) {
+
+        sheet
+          .getRange(
+            rowNumber,
+            map.STATUS + 1
+          )
+          .setValue(
+            status
+          );
+
+      }
+
+
+      if (
+        map.WAKTU_SELESAI !==
+          undefined &&
+        status ===
+          'SELESAI'
+      ) {
+
+        sheet
+          .getRange(
+            rowNumber,
+            map.WAKTU_SELESAI + 1
+          )
+          .setValue(
+            new Date()
+          );
+
+      }
+
+
+      if (
+        map.UPDATED_AT !==
+          undefined
+      ) {
+
+        sheet
+          .getRange(
+            rowNumber,
+            map.UPDATED_AT + 1
+          )
+          .setValue(
+            new Date()
+          );
+
+      }
+
+
+      if (
+        map.UPDATED_BY !==
+          undefined
+      ) {
+
+        sheet
+          .getRange(
+            rowNumber,
+            map.UPDATED_BY + 1
+          )
+          .setValue(
+            username || ''
+          );
+
+      }
+
+
+      return;
+
+    }
+
+  }
+
+}
+
+
+/* =====================================================
+   UPDATE STATUS KUNJUNGAN LANGSUNG
+   ===================================================== */
+
+function updateVisitStatusDirect_(
+  kunjunganId,
+  status,
+  username
+) {
+
+  const sheet =
+    getSheetByConfig(
+      'KUNJUNGAN'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length <= 1) {
+    return;
+  }
+
+
+  const map =
+    getHeaderMap_(
+      values[0]
+    );
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    const row =
+      values[i];
+
+
+    if (
+      String(
+        row[
+          map.KUNJUNGAN_ID
+        ] || ''
+      ) ===
+      String(kunjunganId)
+    ) {
+
+      const rowNumber =
+        i + 1;
+
+
+      if (
+        map.STATUS !==
+        undefined
+      ) {
+
+        sheet
+          .getRange(
+            rowNumber,
+            map.STATUS + 1
+          )
+          .setValue(
+            status
+          );
+
+      }
+
+
+      if (
+        map.UPDATED_AT !==
+          undefined
+      ) {
+
+        sheet
+          .getRange(
+            rowNumber,
+            map.UPDATED_AT + 1
+          )
+          .setValue(
+            new Date()
+          );
+
+      }
+
+
+      if (
+        map.UPDATED_BY !==
+          undefined
+      ) {
+
+        sheet
+          .getRange(
+            rowNumber,
+            map.UPDATED_BY + 1
+          )
+          .setValue(
+            username || ''
+          );
+
+      }
+
+
+      return;
+
+    }
+
+  }
+
+}
+
+
+/* =====================================================
+   RIWAYAT REKAM MEDIS PASIEN
+   ===================================================== */
+
+function getPatientMedicalHistory(
+  token,
+  pasienId
+) {
+
+  requireSession_(token);
+
+
+  pasienId =
+    String(
+      pasienId || ''
+    ).trim();
+
+
+  const sheet =
+    getSheetByConfig(
+      'REKAM_MEDIS'
+    );
+
+
+  const values =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  if (values.length <= 1) {
+    return [];
+  }
+
+
+  const map =
+    getHeaderMap_(
+      values[0]
+    );
+
+
+  const result = [];
+
+
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+
+    const row =
+      values[i];
+
+
+    if (
+      String(
+        row[
+          map.PASIEN_ID
+        ] || ''
+      ) !==
+      pasienId
+    ) {
+
+      continue;
+
+    }
+
+
+    result.push({
+
+      rekamMedisId:
+        String(
+          row[
+            map.REKAM_MEDIS_ID
+          ] || ''
+        ),
+
+      kunjunganId:
+        String(
+          row[
+            map.KUNJUNGAN_ID
+          ] || ''
+        ),
+
+      tanggal:
+        row[
+          map.TANGGAL
+        ]
+          ? formatDateTime_(
+              row[
+                map.TANGGAL
+              ]
+            )
+          : '',
+
+      anamnesis:
+        String(
+          row[
+            map.ANAMNESIS
+          ] || ''
+        ),
+
+      tekananDarah:
+        String(
+          row[
+            map.TEKANAN_DARAH
+          ] || ''
+        ),
+
+      nadi:
+        String(
+          row[
+            map.NADI
+          ] || ''
+        ),
+
+      suhu:
+        String(
+          row[
+            map.SUHU
+          ] || ''
+        ),
+
+      respirasi:
+        String(
+          row[
+            map.RESPIRASI
+          ] || ''
+        ),
+
+      beratBadan:
+        String(
+          row[
+            map.BERAT_BADAN
+          ] || ''
+        ),
+
+      tinggiBadan:
+        String(
+          row[
+            map.TINGGI_BADAN
+          ] || ''
+        ),
+
+      pemeriksaanFisik:
+        String(
+          row[
+            map.PEMERIKSAAN_FISIK
+          ] || ''
+        ),
+
+      diagnosis:
+        String(
+          row[
+            map.DIAGNOSIS
+          ] || ''
+        ),
+
+      tindakan:
+        String(
+          row[
+            map.TINDAKAN
+          ] || ''
+        ),
+
+      catatanBidan:
+        String(
+          row[
+            map.CATATAN_BIDAN
+          ] || ''
+        )
+
+    });
+
+  }
+
+
+  result.reverse();
+
+
+  return result;
+
+}
