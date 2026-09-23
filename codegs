@@ -4271,6 +4271,493 @@ function getActiveQueue(
 
 }
 
+/* =====================================================
+   GET PASIEN UNTUK PEMERIKSAAN
+   HANYA STATUS DILAYANI
+   ===================================================== */
+
+function getPatientsForExamination(
+  token
+) {
+
+  requireSession_(token);
+
+
+  const antrianSheet =
+    getSheetByConfig(
+      'ANTRIAN'
+    );
+
+  const kunjunganSheet =
+    getSheetByConfig(
+      'KUNJUNGAN'
+    );
+
+  const pasienSheet =
+    getSheetByConfig(
+      'PASIEN'
+    );
+
+
+  const antrianValues =
+    antrianSheet
+      .getDataRange()
+      .getValues();
+
+  const kunjunganValues =
+    kunjunganSheet
+      .getDataRange()
+      .getValues();
+
+  const pasienValues =
+    pasienSheet
+      .getDataRange()
+      .getValues();
+
+
+  if (
+    antrianValues.length <= 1
+  ) {
+
+    return [];
+
+  }
+
+
+  const antrianMap =
+    getHeaderMap_(
+      antrianSheet
+    );
+
+  const kunjunganMap =
+    getHeaderMap_(
+      kunjunganSheet
+    );
+
+  const pasienMap =
+    getHeaderMap_(
+      pasienSheet
+    );
+
+
+  const today =
+    getTodayString_();
+
+
+  /* =================================================
+     INDEX KUNJUNGAN
+     ================================================= */
+
+  const kunjunganById = {};
+
+
+  for (
+    let i = 1;
+    i < kunjunganValues.length;
+    i++
+  ) {
+
+    const row =
+      kunjunganValues[i];
+
+
+    const id =
+      String(
+        row[
+          kunjunganMap.KUNJUNGAN_ID
+        ] || ''
+      ).trim();
+
+
+    if (!id) {
+      continue;
+    }
+
+
+    kunjunganById[id] =
+      row;
+
+  }
+
+
+  /* =================================================
+     INDEX PASIEN
+     ================================================= */
+
+  const pasienById = {};
+
+  const pasienByRM = {};
+
+
+  for (
+    let i = 1;
+    i < pasienValues.length;
+    i++
+  ) {
+
+    const row =
+      pasienValues[i];
+
+
+    const pasienId =
+      pasienMap.PASIEN_ID !== undefined
+        ? String(
+            row[
+              pasienMap.PASIEN_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const noRM =
+      pasienMap.NO_RM !== undefined
+        ? String(
+            row[
+              pasienMap.NO_RM
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const nama =
+      pasienMap.NAMA_LENGKAP !== undefined
+        ? String(
+            row[
+              pasienMap.NAMA_LENGKAP
+            ] || ''
+          ).trim()
+        : '';
+
+
+    if (pasienId) {
+
+      pasienById[
+        pasienId
+      ] = {
+        pasienId:
+          pasienId,
+
+        noRM:
+          noRM,
+
+        nama:
+          nama
+      };
+
+    }
+
+
+    if (noRM) {
+
+      pasienByRM[
+        noRM
+      ] = {
+        pasienId:
+          pasienId,
+
+        noRM:
+          noRM,
+
+        nama:
+          nama
+      };
+
+    }
+
+  }
+
+
+  /* =================================================
+     CARI ANTRIAN DILAYANI HARI INI
+     ================================================= */
+
+  const result = [];
+
+
+  for (
+    let i = 1;
+    i < antrianValues.length;
+    i++
+  ) {
+
+    const row =
+      antrianValues[i];
+
+
+    const tanggal =
+      antrianMap.TANGGAL !== undefined
+        ? formatDate_(
+            row[
+              antrianMap.TANGGAL
+            ]
+          )
+        : '';
+
+
+    if (
+      !tanggal ||
+      tanggal.substring(0, 10) !== today
+    ) {
+
+      continue;
+
+    }
+
+
+    const status =
+      String(
+        row[
+          antrianMap.STATUS
+        ] || ''
+      )
+        .trim()
+        .toUpperCase();
+
+
+    /* HANYA DILAYANI */
+
+    if (
+      status !== 'DILAYANI'
+    ) {
+
+      continue;
+
+    }
+
+
+    const antrianId =
+      String(
+        row[
+          antrianMap.ANTRIAN_ID
+        ] || ''
+      ).trim();
+
+
+    const kunjunganId =
+      String(
+        row[
+          antrianMap.KUNJUNGAN_ID
+        ] || ''
+      ).trim();
+
+
+    const noRM =
+      String(
+        row[
+          antrianMap.NO_RM
+        ] || ''
+      ).trim();
+
+
+    /* =================================================
+       CARI KUNJUNGAN
+       ================================================= */
+
+    const kunjungan =
+      kunjunganById[
+        kunjunganId
+      ] || null;
+
+
+    let pasienId =
+      '';
+
+
+    let namaPasien =
+      '';
+
+
+    let jenisPelayanan =
+      '';
+
+
+    if (kunjungan) {
+
+      if (
+        kunjunganMap.PASIEN_ID !==
+        undefined
+      ) {
+
+        pasienId =
+          String(
+            kunjungan[
+              kunjunganMap.PASIEN_ID
+            ] || ''
+          ).trim();
+
+      }
+
+
+      if (
+        kunjunganMap.NAMA_PASIEN !==
+        undefined
+      ) {
+
+        namaPasien =
+          String(
+            kunjungan[
+              kunjunganMap.NAMA_PASIEN
+            ] || ''
+          ).trim();
+
+      }
+
+
+      if (
+        kunjunganMap.JENIS_PELAYANAN !==
+        undefined
+      ) {
+
+        jenisPelayanan =
+          String(
+            kunjungan[
+              kunjunganMap.JENIS_PELAYANAN
+            ] || ''
+          ).trim();
+
+      }
+
+    }
+
+
+    /* =================================================
+       CARI PASIEN
+       PASIEN_ID → NO_RM
+       ================================================= */
+
+    let pasien =
+      null;
+
+
+    if (
+      pasienId &&
+      pasienById[
+        pasienId
+      ]
+    ) {
+
+      pasien =
+        pasienById[
+          pasienId
+        ];
+
+    }
+
+
+    if (
+      !pasien &&
+      noRM &&
+      pasienByRM[
+        noRM
+      ]
+    ) {
+
+      pasien =
+        pasienByRM[
+          noRM
+        ];
+
+    }
+
+
+    if (pasien) {
+
+      if (!pasienId) {
+
+        pasienId =
+          pasien.pasienId || '';
+
+      }
+
+
+      if (!namaPasien) {
+
+        namaPasien =
+          pasien.nama || '';
+
+      }
+
+    }
+
+
+    /* =================================================
+       FALLBACK DARI ANTRIAN
+       ================================================= */
+
+    if (
+      !namaPasien &&
+      antrianMap.NAMA_PASIEN !==
+        undefined
+    ) {
+
+      namaPasien =
+        String(
+          row[
+            antrianMap.NAMA_PASIEN
+          ] || ''
+        ).trim();
+
+    }
+
+
+    if (
+      !jenisPelayanan &&
+      antrianMap.JENIS_LAYANAN !==
+        undefined
+    ) {
+
+      jenisPelayanan =
+        String(
+          row[
+            antrianMap.JENIS_LAYANAN
+          ] || ''
+        ).trim();
+
+    }
+
+
+    /* =================================================
+       HASIL
+       ================================================= */
+
+    result.push({
+
+      antrianId:
+        antrianId,
+
+      nomorAntrian:
+        String(
+          row[
+            antrianMap.NOMOR_ANTRIAN
+          ] || ''
+        ),
+
+      kunjunganId:
+        kunjunganId,
+
+      pasienId:
+        pasienId,
+
+      noRM:
+        noRM,
+
+      namaPasien:
+        namaPasien,
+
+      jenisPelayanan:
+        jenisPelayanan,
+
+      status:
+        'DILAYANI'
+
+    });
+
+  }
+
+
+  return result;
+
+}
 
 /*******************************************************
  * PMB SETIAWATI
