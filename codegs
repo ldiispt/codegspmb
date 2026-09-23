@@ -2,7 +2,7 @@
  * PMB SETIAWATI
  * SISTEM INFORMASI PRAKTIK MANDIRI BIDAN
  *
- * V1 TAHAP 8D
+ * V1 TAHAP 9A
  *
  * BASELINE:
  * - Login
@@ -19,6 +19,7 @@
  * - Data Obat
  * - Resep
  * - Pelayanan Farmasi
+ * - Transaksi
  *******************************************************/
 
 
@@ -11542,5 +11543,1219 @@ function processPrescription(
     lock.releaseLock();
 
   }
+
+}
+
+/* ============================================================
+   V1 TAHAP 9A
+   KEUANGAN - TRANSAKSI
+   ============================================================ */
+
+
+/* ============================================================
+   GENERATE ID TRANSAKSI
+   ============================================================ */
+function generateTransactionId_() {
+
+  const prefix =
+    String(
+      PMB_CONFIG.TRANSACTION_PREFIX ||
+      'TRX-'
+    ).trim();
+
+  return (
+    prefix +
+    Utilities.getUuid()
+      .replace(/-/g, '')
+      .substring(0, 8)
+      .toUpperCase()
+  );
+
+}
+
+
+/* ============================================================
+   GET TRANSACTIONS
+   ============================================================ */
+function getTransactions(
+  token,
+  search,
+  jenis,
+  status
+) {
+
+  requireSession_(token);
+
+  search =
+    String(search || '')
+      .trim()
+      .toLowerCase();
+
+  jenis =
+    String(jenis || '')
+      .trim()
+      .toUpperCase();
+
+  status =
+    String(status || '')
+      .trim()
+      .toUpperCase();
+
+
+  const transactionSheet =
+    getSheetByConfig('TRANSAKSI');
+
+  const detailSheet =
+    getSheetByConfig('TRANSAKSI_DETAIL');
+
+  const patientSheet =
+    getSheetByConfig('PASIEN');
+
+
+  const transactionData =
+    transactionSheet
+      .getDataRange()
+      .getValues();
+
+  const detailData =
+    detailSheet
+      .getDataRange()
+      .getValues();
+
+  const patientData =
+    patientSheet
+      .getDataRange()
+      .getValues();
+
+
+  if (transactionData.length < 2) {
+    return [];
+  }
+
+
+  const transactionMap =
+    getHeaderMap_(transactionData[0]);
+
+  const detailMap =
+    detailData.length
+      ? getHeaderMap_(detailData[0])
+      : {};
+
+  const patientMap =
+    patientData.length
+      ? getHeaderMap_(patientData[0])
+      : {};
+
+
+  /* ========================================================
+     INDEX PASIEN
+     ======================================================== */
+
+  const patientByRM = {};
+
+  if (patientData.length > 1) {
+
+    for (
+      let i = 1;
+      i < patientData.length;
+      i++
+    ) {
+
+      const row =
+        patientData[i];
+
+      const noRM =
+        patientMap.NO_RM !== undefined
+          ? String(
+              row[
+                patientMap.NO_RM
+              ] || ''
+            ).trim()
+          : '';
+
+      if (noRM) {
+
+        patientByRM[noRM] =
+          row;
+
+      }
+
+    }
+
+  }
+
+
+  /* ========================================================
+     INDEX DETAIL
+     ======================================================== */
+
+  const detailsByTransaction = {};
+
+
+  if (detailData.length > 1) {
+
+    for (
+      let i = 1;
+      i < detailData.length;
+      i++
+    ) {
+
+      const row =
+        detailData[i];
+
+      const transactionId =
+        detailMap.TRANSAKSI_ID !== undefined
+          ? String(
+              row[
+                detailMap.TRANSAKSI_ID
+              ] || ''
+            ).trim()
+          : '';
+
+      if (!transactionId) {
+        continue;
+      }
+
+
+      if (
+        !detailsByTransaction[
+          transactionId
+        ]
+      ) {
+
+        detailsByTransaction[
+          transactionId
+        ] = [];
+
+      }
+
+
+      detailsByTransaction[
+        transactionId
+      ].push({
+
+        detailId:
+          detailMap.TRANSAKSI_DETAIL_ID !== undefined
+            ? row[
+                detailMap.TRANSAKSI_DETAIL_ID
+              ]
+            : '',
+
+        itemId:
+          detailMap.ITEM_ID !== undefined
+            ? row[
+                detailMap.ITEM_ID
+              ]
+            : '',
+
+        kodeItem:
+          detailMap.KODE_ITEM !== undefined
+            ? row[
+                detailMap.KODE_ITEM
+              ]
+            : '',
+
+        namaItem:
+          detailMap.NAMA_ITEM !== undefined
+            ? row[
+                detailMap.NAMA_ITEM
+              ]
+            : '',
+
+        jenisItem:
+          detailMap.JENIS_ITEM !== undefined
+            ? row[
+                detailMap.JENIS_ITEM
+              ]
+            : '',
+
+        qty:
+          detailMap.QTY !== undefined
+            ? Number(
+                row[
+                  detailMap.QTY
+                ] || 0
+              )
+            : 0,
+
+        harga:
+          detailMap.HARGA !== undefined
+            ? Number(
+                row[
+                  detailMap.HARGA
+                ] || 0
+              )
+            : 0,
+
+        diskon:
+          detailMap.DISKON !== undefined
+            ? Number(
+                row[
+                  detailMap.DISKON
+                ] || 0
+              )
+            : 0,
+
+        subtotal:
+          detailMap.SUBTOTAL !== undefined
+            ? Number(
+                row[
+                  detailMap.SUBTOTAL
+                ] || 0
+              )
+            : 0
+
+      });
+
+    }
+
+  }
+
+
+  /* ========================================================
+     BUILD RESULT
+     ======================================================== */
+
+  const result = [];
+
+
+  for (
+    let i = transactionData.length - 1;
+    i >= 1;
+    i--
+  ) {
+
+    const row =
+      transactionData[i];
+
+
+    const transactionId =
+      transactionMap.TRANSAKSI_ID !== undefined
+        ? String(
+            row[
+              transactionMap.TRANSAKSI_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    if (!transactionId) {
+      continue;
+    }
+
+
+    const noRM =
+      transactionMap.NO_RM !== undefined
+        ? String(
+            row[
+              transactionMap.NO_RM
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const transactionJenis =
+      transactionMap.JENIS_TRANSAKSI !== undefined
+        ? String(
+            row[
+              transactionMap.JENIS_TRANSAKSI
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const transactionStatus =
+      transactionMap.STATUS !== undefined
+        ? String(
+            row[
+              transactionMap.STATUS
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const namaPasien =
+      noRM &&
+      patientByRM[noRM]
+        ? String(
+            patientByRM[noRM][
+              patientMap.NAMA_LENGKAP
+            ] || ''
+          ).trim()
+        : '';
+
+
+    /* ======================================================
+       FILTER
+       ====================================================== */
+
+    const searchable = [
+      transactionId,
+      noRM,
+      namaPasien,
+      transactionJenis,
+      transactionStatus,
+      transactionMap.KETERANGAN !== undefined
+        ? row[
+            transactionMap.KETERANGAN
+          ]
+        : ''
+    ]
+      .join(' ')
+      .toLowerCase();
+
+
+    if (
+      search &&
+      searchable.indexOf(search) === -1
+    ) {
+      continue;
+    }
+
+
+    if (
+      jenis &&
+      transactionJenis !== jenis
+    ) {
+      continue;
+    }
+
+
+    if (
+      status &&
+      transactionStatus !== status
+    ) {
+      continue;
+    }
+
+
+    result.push({
+
+      transaksiId:
+        transactionId,
+
+      kunjunganId:
+        transactionMap.KUNJUNGAN_ID !== undefined
+          ? row[
+              transactionMap.KUNJUNGAN_ID
+            ]
+          : '',
+
+      noRM:
+        noRM,
+
+      namaPasien:
+        namaPasien,
+
+      tanggal:
+        transactionMap.TANGGAL !== undefined
+          ? formatDate_(
+              row[
+                transactionMap.TANGGAL
+              ]
+            )
+          : '',
+
+      jenisTransaksi:
+        transactionJenis,
+
+      total:
+        transactionMap.TOTAL !== undefined
+          ? Number(
+              row[
+                transactionMap.TOTAL
+              ] || 0
+            )
+          : 0,
+
+      diskon:
+        transactionMap.DISKON !== undefined
+          ? Number(
+              row[
+                transactionMap.DISKON
+              ] || 0
+            )
+          : 0,
+
+      grandTotal:
+        transactionMap.GRAND_TOTAL !== undefined
+          ? Number(
+              row[
+                transactionMap.GRAND_TOTAL
+              ] || 0
+            )
+          : 0,
+
+      status:
+        transactionStatus,
+
+      keterangan:
+        transactionMap.KETERANGAN !== undefined
+          ? row[
+              transactionMap.KETERANGAN
+            ] || ''
+          : '',
+
+      detail:
+        detailsByTransaction[
+          transactionId
+        ] || []
+
+    });
+
+  }
+
+
+  return result;
+
+}
+
+
+/* ============================================================
+   GET SINGLE TRANSACTION
+   ============================================================ */
+function getTransaction(
+  token,
+  transaksiId
+) {
+
+  requireSession_(token);
+
+  transaksiId =
+    String(transaksiId || '')
+      .trim();
+
+  if (!transaksiId) {
+
+    throw new Error(
+      'ID transaksi tidak ditemukan.'
+    );
+
+  }
+
+
+  const list =
+    getTransactions(
+      token,
+      '',
+      '',
+      ''
+    );
+
+
+  const transaction =
+    list.find(
+      function(item) {
+
+        return (
+          String(
+            item.transaksiId
+          ) === transaksiId
+        );
+
+      }
+    );
+
+
+  if (!transaction) {
+
+    throw new Error(
+      'Transaksi tidak ditemukan.'
+    );
+
+  }
+
+
+  return transaction;
+
+}
+
+
+/* ============================================================
+   SAVE TRANSACTION
+   ============================================================ */
+function saveTransaction(
+  token,
+  data
+) {
+
+  const session =
+    requireSession_(token);
+
+
+  data =
+    data || {};
+
+
+  const jenis =
+    String(
+      data.jenisTransaksi || ''
+    )
+      .trim()
+      .toUpperCase();
+
+
+  if (
+    jenis !== 'PENDAPATAN' &&
+    jenis !== 'PENGELUARAN'
+  ) {
+
+    throw new Error(
+      'Jenis transaksi tidak valid.'
+    );
+
+  }
+
+
+  const tanggal =
+    data.tanggal
+      ? new Date(data.tanggal)
+      : new Date();
+
+
+  if (
+    isNaN(
+      tanggal.getTime()
+    )
+  ) {
+
+    throw new Error(
+      'Tanggal transaksi tidak valid.'
+    );
+
+  }
+
+
+  const kunjunganId =
+    String(
+      data.kunjunganId || ''
+    ).trim();
+
+
+  const noRM =
+    String(
+      data.noRM || ''
+    ).trim();
+
+
+  const keterangan =
+    String(
+      data.keterangan || ''
+    ).trim();
+
+
+  const details =
+    Array.isArray(data.details)
+      ? data.details
+      : [];
+
+
+  if (
+    details.length === 0
+  ) {
+
+    throw new Error(
+      'Minimal satu item transaksi harus diisi.'
+    );
+
+  }
+
+
+  /* ========================================================
+     SHEETS
+     ======================================================== */
+
+  const transactionSheet =
+    getSheetByConfig('TRANSAKSI');
+
+  const detailSheet =
+    getSheetByConfig('TRANSAKSI_DETAIL');
+
+
+  const transactionMap =
+    getHeaderMap_(
+      transactionSheet
+    );
+
+  const detailMap =
+    getHeaderMap_(
+      detailSheet
+    );
+
+
+  /* ========================================================
+     VALIDASI DETAIL
+     ======================================================== */
+
+  let total = 0;
+
+  const detailRows = [];
+
+
+  details.forEach(
+    function(item, index) {
+
+      const namaItem =
+        String(
+          item.namaItem || ''
+        ).trim();
+
+      if (!namaItem) {
+
+        throw new Error(
+          'Nama item pada baris ' +
+          (index + 1) +
+          ' wajib diisi.'
+        );
+
+      }
+
+
+      const qty =
+        Number(
+          item.qty || 0
+        );
+
+      const harga =
+        Number(
+          item.harga || 0
+        );
+
+      const diskon =
+        Number(
+          item.diskon || 0
+        );
+
+
+      if (
+        qty <= 0
+      ) {
+
+        throw new Error(
+          'Qty item "' +
+          namaItem +
+          '" harus lebih dari 0.'
+        );
+
+      }
+
+
+      if (
+        harga < 0 ||
+        diskon < 0
+      ) {
+
+        throw new Error(
+          'Harga/diskon item "' +
+          namaItem +
+          '" tidak valid.'
+        );
+
+      }
+
+
+      const bruto =
+        qty * harga;
+
+
+      const subtotal =
+        Math.max(
+          0,
+          bruto - diskon
+        );
+
+
+      total +=
+        subtotal;
+
+
+      const row =
+        new Array(
+          detailSheet.getLastColumn()
+        ).fill('');
+
+
+      function setDetail(
+        field,
+        value
+      ) {
+
+        if (
+          detailMap[field] !== undefined
+        ) {
+
+          row[
+            detailMap[field]
+          ] = value;
+
+        }
+
+      }
+
+
+      const detailId =
+        'TRD-' +
+        Utilities.getUuid()
+          .replace(/-/g, '')
+          .substring(0, 8)
+          .toUpperCase();
+
+
+      setDetail(
+        'TRANSAKSI_DETAIL_ID',
+        detailId
+      );
+
+      setDetail(
+        'TRANSAKSI_ID',
+        ''
+      );
+
+      setDetail(
+        'ITEM_ID',
+        String(
+          item.itemId || ''
+        ).trim()
+      );
+
+      setDetail(
+        'KODE_ITEM',
+        String(
+          item.kodeItem || ''
+        ).trim()
+      );
+
+      setDetail(
+        'NAMA_ITEM',
+        namaItem
+      );
+
+      setDetail(
+        'JENIS_ITEM',
+        String(
+          item.jenisItem || ''
+        ).trim()
+      );
+
+      setDetail(
+        'QTY',
+        qty
+      );
+
+      setDetail(
+        'HARGA',
+        harga
+      );
+
+      setDetail(
+        'DISKON',
+        diskon
+      );
+
+      setDetail(
+        'SUBTOTAL',
+        subtotal
+      );
+
+
+      detailRows.push({
+        row: row,
+        detailId: detailId
+      });
+
+    }
+  );
+
+
+  /* ========================================================
+     DISKON TRANSAKSI
+     ======================================================== */
+
+  const transactionDiscount =
+    Math.max(
+      0,
+      Number(
+        data.diskon || 0
+      )
+    );
+
+
+  const grandTotal =
+    Math.max(
+      0,
+      total - transactionDiscount
+    );
+
+
+  /* ========================================================
+     ID TRANSAKSI
+     ======================================================== */
+
+  const transaksiId =
+    generateTransactionId_();
+
+
+  /* ========================================================
+     ISI TRANSAKSI_ID KE DETAIL
+     ======================================================== */
+
+  detailRows.forEach(
+    function(item) {
+
+      if (
+        detailMap.TRANSAKSI_ID !== undefined
+      ) {
+
+        item.row[
+          detailMap.TRANSAKSI_ID
+        ] =
+          transaksiId;
+
+      }
+
+    }
+  );
+
+
+  /* ========================================================
+     BUILD HEADER TRANSAKSI
+     ======================================================== */
+
+  const transactionRow =
+    new Array(
+      transactionSheet.getLastColumn()
+    ).fill('');
+
+
+  function setTransaction(
+    field,
+    value
+  ) {
+
+    if (
+      transactionMap[field] !== undefined
+    ) {
+
+      transactionRow[
+        transactionMap[field]
+      ] = value;
+
+    }
+
+  }
+
+
+  setTransaction(
+    'TRANSAKSI_ID',
+    transaksiId
+  );
+
+  setTransaction(
+    'KUNJUNGAN_ID',
+    kunjunganId
+  );
+
+  setTransaction(
+    'NO_RM',
+    noRM
+  );
+
+  setTransaction(
+    'TANGGAL',
+    tanggal
+  );
+
+  setTransaction(
+    'JENIS_TRANSAKSI',
+    jenis
+  );
+
+  setTransaction(
+    'TOTAL',
+    total
+  );
+
+  setTransaction(
+    'DISKON',
+    transactionDiscount
+  );
+
+  setTransaction(
+    'GRAND_TOTAL',
+    grandTotal
+  );
+
+  setTransaction(
+    'STATUS',
+    'AKTIF'
+  );
+
+  setTransaction(
+    'KETERANGAN',
+    keterangan
+  );
+
+  setTransaction(
+    'CREATED_AT',
+    new Date()
+  );
+
+  setTransaction(
+    'UPDATED_AT',
+    new Date()
+  );
+
+
+  /* ========================================================
+     SIMPAN DETAIL DAHULU
+     ======================================================== */
+
+  if (
+    detailRows.length > 0
+  ) {
+
+    detailSheet
+      .getRange(
+        detailSheet.getLastRow() + 1,
+        1,
+        detailRows.length,
+        detailSheet.getLastColumn()
+      )
+      .setValues(
+        detailRows.map(
+          function(item) {
+            return item.row;
+          }
+        )
+      );
+
+  }
+
+
+  /* ========================================================
+     SIMPAN HEADER
+     ======================================================== */
+
+  transactionSheet
+    .getRange(
+      transactionSheet.getLastRow() + 1,
+      1,
+      1,
+      transactionRow.length
+    )
+    .setValues([
+      transactionRow
+    ]);
+
+
+  /* ========================================================
+     AUDIT
+     ======================================================== */
+
+  writeAuditLog_(
+    session.userId,
+    session.username,
+    'TAMBAH_TRANSAKSI',
+    'KEUANGAN',
+    transaksiId,
+    'Transaksi ' +
+      jenis +
+      ' sebesar Rp ' +
+      grandTotal.toLocaleString('id-ID')
+  );
+
+
+  return {
+
+    success: true,
+
+    transaksiId:
+      transaksiId,
+
+    total:
+      total,
+
+    diskon:
+      transactionDiscount,
+
+    grandTotal:
+      grandTotal,
+
+    status:
+      'AKTIF',
+
+    message:
+      'Transaksi berhasil disimpan.'
+
+  };
+
+}
+
+
+/* ============================================================
+   CANCEL TRANSACTION
+   ============================================================ */
+function cancelTransaction(
+  token,
+  transaksiId
+) {
+
+  const session =
+    requireSession_(token);
+
+
+  transaksiId =
+    String(
+      transaksiId || ''
+    ).trim();
+
+
+  if (!transaksiId) {
+
+    throw new Error(
+      'ID transaksi tidak ditemukan.'
+    );
+
+  }
+
+
+  const sheet =
+    getSheetByConfig('TRANSAKSI');
+
+  const map =
+    getHeaderMap_(
+      sheet
+    );
+
+  const data =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  let rowNumber =
+    -1;
+
+  let currentStatus =
+    '';
+
+
+  for (
+    let i = 1;
+    i < data.length;
+    i++
+  ) {
+
+    const id =
+      map.TRANSAKSI_ID !== undefined
+        ? String(
+            data[i][
+              map.TRANSAKSI_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    if (
+      id === transaksiId
+    ) {
+
+      rowNumber =
+        i + 1;
+
+      currentStatus =
+        map.STATUS !== undefined
+          ? String(
+              data[i][
+                map.STATUS
+              ] || ''
+            ).trim()
+          : '';
+
+      break;
+
+    }
+
+  }
+
+
+  if (
+    rowNumber === -1
+  ) {
+
+    throw new Error(
+      'Transaksi tidak ditemukan.'
+    );
+
+  }
+
+
+  if (
+    currentStatus === 'BATAL'
+  ) {
+
+    throw new Error(
+      'Transaksi sudah dibatalkan.'
+    );
+
+  }
+
+
+  if (
+    map.STATUS !== undefined
+  ) {
+
+    sheet
+      .getRange(
+        rowNumber,
+        map.STATUS + 1
+      )
+      .setValue(
+        'BATAL'
+      );
+
+  }
+
+
+  if (
+    map.UPDATED_AT !== undefined
+  ) {
+
+    sheet
+      .getRange(
+        rowNumber,
+        map.UPDATED_AT + 1
+      )
+      .setValue(
+        new Date()
+      );
+
+  }
+
+
+  writeAuditLog_(
+    session.userId,
+    session.username,
+    'BATAL_TRANSAKSI',
+    'KEUANGAN',
+    transaksiId,
+    'Transaksi dibatalkan.'
+  );
+
+
+  return {
+
+    success: true,
+
+    transaksiId:
+      transaksiId,
+
+    status:
+      'BATAL',
+
+    message:
+      'Transaksi berhasil dibatalkan.'
+
+  };
 
 }
