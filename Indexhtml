@@ -1241,7 +1241,7 @@
 
       <div
         class="menu-item"
-        onclick="placeholderPage('Transaksi')"
+        onclick="showPage('transaksi', this)"
       >
         <span class="menu-icon">💰</span>
         Transaksi
@@ -7770,7 +7770,8 @@ function toggleMedicineStatus(
     if (page === 'resep') { document.getElementById('topbarTitle').textContent='Resep'; loadPrescriptionPage
     ();return; }
     if (page === 'farmasi') { document.getElementById('topbarTitle').textContent = 'Pelayanan Farmasi'; loadPharmacyPage();return; }
-
+    if (page === 'transaksi') { document.getElementById('topbarTitle').textContent = 'Transaksi'; loadTransactionPage(); return; }
+    
   placeholderPage(page);
   };
 })();
@@ -11817,6 +11818,1634 @@ function closePharmacyDetail() {
   if (modal) {
     modal.remove();
   }
+
+}
+
+/* ============================================================
+ * V1 TAHAP 9A
+ * KEUANGAN — TRANSAKSI
+ * ============================================================ */
+
+let transactionRows = [];
+
+let transactionItems = [];
+
+let currentTransactionId = '';
+
+
+/* ============================================================
+ * HALAMAN TRANSAKSI
+ * ============================================================ */
+function loadTransactionPage() {
+
+  document.getElementById(
+    'topbarTitle'
+  ).textContent =
+    'Transaksi';
+
+
+  document.getElementById(
+    'content'
+  ).innerHTML = `
+
+    <div class="page-header">
+
+      <div>
+
+        <h1 class="page-title">
+          💰 Transaksi
+        </h1>
+
+        <div class="page-description">
+          Kelola transaksi pendapatan dan pengeluaran.
+        </div>
+
+      </div>
+
+
+      <button
+        class="btn btn-primary"
+        onclick="openTransactionForm()"
+      >
+        + Tambah Transaksi
+      </button>
+
+    </div>
+
+
+    <div
+      style="
+        display:grid;
+        grid-template-columns:
+          repeat(3,1fr);
+        gap:15px;
+        margin-bottom:20px;
+      "
+    >
+
+      <div class="card">
+
+        <div class="detail-label">
+          PENDAPATAN
+        </div>
+
+        <div
+          id="transactionRevenue"
+          style="
+            font-size:24px;
+            font-weight:700;
+            margin-top:8px;
+          "
+        >
+          Rp 0
+        </div>
+
+      </div>
+
+
+      <div class="card">
+
+        <div class="detail-label">
+          PENGELUARAN
+        </div>
+
+        <div
+          id="transactionExpense"
+          style="
+            font-size:24px;
+            font-weight:700;
+            margin-top:8px;
+          "
+        >
+          Rp 0
+        </div>
+
+      </div>
+
+
+      <div class="card">
+
+        <div class="detail-label">
+          SELISIH
+        </div>
+
+        <div
+          id="transactionBalance"
+          style="
+            font-size:24px;
+            font-weight:700;
+            margin-top:8px;
+          "
+        >
+          Rp 0
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="card">
+
+      <div class="toolbar">
+
+        <div class="search-box">
+
+          <input
+            id="transactionSearch"
+            class="form-control"
+            placeholder="🔍 Cari transaksi, pasien, No. RM..."
+            oninput="loadTransactions()"
+          >
+
+        </div>
+
+
+        <select
+          id="transactionJenis"
+          class="form-control"
+          onchange="loadTransactions()"
+        >
+
+          <option value="">
+            Semua Jenis
+          </option>
+
+          <option value="PENDAPATAN">
+            Pendapatan
+          </option>
+
+          <option value="PENGELUARAN">
+            Pengeluaran
+          </option>
+
+        </select>
+
+
+        <select
+          id="transactionStatus"
+          class="form-control"
+          onchange="loadTransactions()"
+        >
+
+          <option value="">
+            Semua Status
+          </option>
+
+          <option value="AKTIF">
+            Aktif
+          </option>
+
+          <option value="BATAL">
+            Batal
+          </option>
+
+        </select>
+
+      </div>
+
+
+      <div id="transactionTable">
+
+        <div class="empty">
+          Memuat transaksi...
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  loadTransactions();
+
+}
+
+
+/* ============================================================
+ * LOAD TRANSACTIONS
+ * ============================================================ */
+function loadTransactions() {
+
+  const search =
+    document.getElementById(
+      'transactionSearch'
+    )?.value || '';
+
+
+  const jenis =
+    document.getElementById(
+      'transactionJenis'
+    )?.value || '';
+
+
+  const status =
+    document.getElementById(
+      'transactionStatus'
+    )?.value || '';
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        transactionRows =
+          result || [];
+
+        renderTransactions(
+          transactionRows
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .getTransactions(
+      sessionToken,
+      search,
+      jenis,
+      status
+    );
+
+}
+
+
+/* ============================================================
+ * RENDER TRANSACTIONS
+ * ============================================================ */
+function renderTransactions(
+  rows
+) {
+
+  let revenue = 0;
+  let expense = 0;
+
+
+  rows.forEach(
+    function(item) {
+
+      if (
+        item.status === 'BATAL'
+      ) {
+        return;
+      }
+
+
+      if (
+        item.jenisTransaksi ===
+        'PENDAPATAN'
+      ) {
+
+        revenue +=
+          Number(
+            item.grandTotal || 0
+          );
+
+      }
+
+
+      if (
+        item.jenisTransaksi ===
+        'PENGELUARAN'
+      ) {
+
+        expense +=
+          Number(
+            item.grandTotal || 0
+          );
+
+      }
+
+    }
+  );
+
+
+  const revenueEl =
+    document.getElementById(
+      'transactionRevenue'
+    );
+
+  const expenseEl =
+    document.getElementById(
+      'transactionExpense'
+    );
+
+  const balanceEl =
+    document.getElementById(
+      'transactionBalance'
+    );
+
+
+  if (revenueEl) {
+
+    revenueEl.textContent =
+      formatRupiah(
+        revenue
+      );
+
+  }
+
+
+  if (expenseEl) {
+
+    expenseEl.textContent =
+      formatRupiah(
+        expense
+      );
+
+  }
+
+
+  if (balanceEl) {
+
+    balanceEl.textContent =
+      formatRupiah(
+        revenue - expense
+      );
+
+  }
+
+
+  const container =
+    document.getElementById(
+      'transactionTable'
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  if (
+    !rows ||
+    rows.length === 0
+  ) {
+
+    container.innerHTML = `
+
+      <div class="empty">
+
+        <div class="empty-icon">
+          💰
+        </div>
+
+        <div>
+          Belum ada transaksi.
+        </div>
+
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  container.innerHTML = `
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>No</th>
+            <th>Tanggal</th>
+            <th>Transaksi</th>
+            <th>Pasien</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Aksi</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${rows.map(
+            function(item, index) {
+
+              const isIncome =
+                item.jenisTransaksi ===
+                'PENDAPATAN';
+
+
+              return `
+
+                <tr>
+
+                  <td>
+                    ${index + 1}
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      item.tanggal
+                    )}
+                  </td>
+
+
+                  <td>
+
+                    <strong>
+                      ${escapeHTML(
+                        item.transaksiId
+                      )}
+                    </strong>
+
+                    <div
+                      style="
+                        font-size:12px;
+                        color:#777;
+                        margin-top:4px;
+                      "
+                    >
+                      ${isIncome
+                        ? 'PENDAPATAN'
+                        : 'PENGELUARAN'}
+                    </div>
+
+                  </td>
+
+
+                  <td>
+
+                    ${
+                      item.namaPasien
+                        ? escapeHTML(
+                            item.namaPasien
+                          ) +
+                          '<br><small>' +
+                          escapeHTML(
+                            item.noRM
+                          ) +
+                          '</small>'
+                        : '-'
+                    }
+
+                  </td>
+
+
+                  <td>
+
+                    <strong>
+                      ${formatRupiah(
+                        item.grandTotal
+                      )}
+                    </strong>
+
+                  </td>
+
+
+                  <td>
+
+                    ${
+                      item.status ===
+                      'BATAL'
+
+                        ? `
+                          <span class="badge badge-inactive">
+                            BATAL
+                          </span>
+                        `
+
+                        : `
+                          <span class="badge badge-active">
+                            AKTIF
+                          </span>
+                        `
+                    }
+
+                  </td>
+
+
+                  <td>
+
+                    <button
+                      class="btn btn-secondary"
+                      onclick="viewTransaction(
+                        '${escapeAttr(
+                          item.transaksiId
+                        )}'
+                      )"
+                    >
+                      👁️ Detail
+                    </button>
+
+                    ${
+                      item.status !== 'BATAL'
+                        ? `
+                          <button
+                            class="btn btn-danger"
+                            onclick="cancelTransactionUI(
+                              '${escapeAttr(
+                                item.transaksiId
+                              )}'
+                            )"
+                          >
+                            Batal
+                          </button>
+                        `
+                        : ''
+                    }
+
+                  </td>
+
+                </tr>
+
+              `;
+
+            }
+          ).join('')}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+
+}
+
+
+/* ============================================================
+ * FORM TRANSAKSI
+ * ============================================================ */
+function openTransactionForm() {
+
+  transactionItems = [];
+
+
+  document.getElementById(
+    'content'
+  ).innerHTML = `
+
+    <div class="page-header">
+
+      <div>
+
+        <h1 class="page-title">
+          💰 Tambah Transaksi
+        </h1>
+
+        <div class="page-description">
+          Catat pendapatan atau pengeluaran.
+        </div>
+
+      </div>
+
+
+      <button
+        class="btn btn-secondary"
+        onclick="loadTransactionPage()"
+      >
+        ← Kembali
+      </button>
+
+    </div>
+
+
+    <div class="card">
+
+      <div class="form-grid">
+
+        <div class="form-group">
+
+          <label class="form-label">
+            Jenis Transaksi *
+          </label>
+
+          <select
+            id="transactionFormJenis"
+            class="form-control"
+          >
+
+            <option value="PENDAPATAN">
+              PENDAPATAN
+            </option>
+
+            <option value="PENGELUARAN">
+              PENGELUARAN
+            </option>
+
+          </select>
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label class="form-label">
+            Tanggal *
+          </label>
+
+          <input
+            id="transactionFormTanggal"
+            type="date"
+            class="form-control"
+            value="${new Date()
+              .toISOString()
+              .substring(0,10)}"
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label class="form-label">
+            No. RM
+          </label>
+
+          <input
+            id="transactionFormNoRM"
+            class="form-control"
+            placeholder="Opsional"
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label class="form-label">
+            Kunjungan ID
+          </label>
+
+          <input
+            id="transactionFormKunjungan"
+            class="form-control"
+            placeholder="Opsional"
+          >
+
+        </div>
+
+
+        <div
+          class="form-group"
+          style="grid-column:1/-1;"
+        >
+
+          <label class="form-label">
+            Keterangan
+          </label>
+
+          <textarea
+            id="transactionFormKeterangan"
+            class="form-control"
+            rows="2"
+            placeholder="Keterangan transaksi"
+          ></textarea>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="card">
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          margin-bottom:15px;
+        "
+      >
+
+        <div class="card-title">
+          Detail Item
+        </div>
+
+        <button
+          class="btn btn-primary"
+          onclick="addTransactionItem()"
+        >
+          + Tambah Item
+        </button>
+
+      </div>
+
+
+      <div id="transactionItemsContainer">
+
+      </div>
+
+
+      <div
+        style="
+          margin-top:20px;
+          padding-top:20px;
+          border-top:1px solid #eee;
+        "
+      >
+
+        <div
+          style="
+            display:flex;
+            justify-content:flex-end;
+            gap:30px;
+            align-items:center;
+          "
+        >
+
+          <strong>
+            Total:
+          </strong>
+
+          <strong
+            id="transactionFormTotal"
+            style="font-size:22px;"
+          >
+            Rp 0
+          </strong>
+
+        </div>
+
+
+        <div
+          style="
+            display:flex;
+            justify-content:flex-end;
+            align-items:center;
+            gap:15px;
+            margin-top:12px;
+          "
+        >
+
+          <label>
+            Diskon Transaksi
+          </label>
+
+          <input
+            id="transactionFormDiskon"
+            class="form-control"
+            type="number"
+            min="0"
+            value="0"
+            style="max-width:180px;"
+            oninput="calculateTransactionTotal()"
+          >
+
+        </div>
+
+
+        <div
+          style="
+            display:flex;
+            justify-content:flex-end;
+            gap:30px;
+            align-items:center;
+            margin-top:12px;
+          "
+        >
+
+          <strong>
+            Grand Total:
+          </strong>
+
+          <strong
+            id="transactionFormGrandTotal"
+            style="font-size:25px;"
+          >
+            Rp 0
+          </strong>
+
+        </div>
+
+      </div>
+
+
+      <div
+        style="
+          display:flex;
+          justify-content:flex-end;
+          gap:10px;
+          margin-top:20px;
+        "
+      >
+
+        <button
+          class="btn btn-secondary"
+          onclick="loadTransactionPage()"
+        >
+          Batal
+        </button>
+
+        <button
+          class="btn btn-primary"
+          onclick="saveTransactionUI()"
+        >
+          💾 Simpan Transaksi
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  addTransactionItem();
+
+}
+
+
+/* ============================================================
+ * ADD ITEM
+ * ============================================================ */
+function addTransactionItem() {
+
+  transactionItems.push({
+
+    itemId: '',
+    kodeItem: '',
+    namaItem: '',
+    jenisItem: '',
+    qty: 1,
+    harga: 0,
+    diskon: 0
+
+  });
+
+
+  renderTransactionItems();
+
+}
+
+
+/* ============================================================
+ * RENDER ITEMS
+ * ============================================================ */
+function renderTransactionItems() {
+
+  const container =
+    document.getElementById(
+      'transactionItemsContainer'
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  container.innerHTML =
+    transactionItems.map(
+      function(item, index) {
+
+        return `
+
+          <div
+            class="card"
+            style="
+              margin-bottom:12px;
+              background:#fafafa;
+            "
+          >
+
+            <div class="form-grid">
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Nama Item *
+                </label>
+
+                <input
+                  class="form-control"
+                  value="${escapeAttr(
+                    item.namaItem
+                  )}"
+                  oninput="updateTransactionItem(
+                    ${index},
+                    'namaItem',
+                    this.value
+                  )"
+                  placeholder="Contoh: Pemeriksaan ANC"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Jenis Item
+                </label>
+
+                <input
+                  class="form-control"
+                  value="${escapeAttr(
+                    item.jenisItem
+                  )}"
+                  oninput="updateTransactionItem(
+                    ${index},
+                    'jenisItem',
+                    this.value
+                  )"
+                  placeholder="Pemeriksaan / Obat / ATK..."
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Qty
+                </label>
+
+                <input
+                  class="form-control"
+                  type="number"
+                  min="1"
+                  value="${item.qty}"
+                  oninput="updateTransactionItem(
+                    ${index},
+                    'qty',
+                    this.value
+                  )"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Harga
+                </label>
+
+                <input
+                  class="form-control"
+                  type="number"
+                  min="0"
+                  value="${item.harga}"
+                  oninput="updateTransactionItem(
+                    ${index},
+                    'harga',
+                    this.value
+                  )"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Diskon Item
+                </label>
+
+                <input
+                  class="form-control"
+                  type="number"
+                  min="0"
+                  value="${item.diskon}"
+                  oninput="updateTransactionItem(
+                    ${index},
+                    'diskon',
+                    this.value
+                  )"
+                >
+
+              </div>
+
+
+              <div
+                class="form-group"
+                style="
+                  display:flex;
+                  align-items:flex-end;
+                "
+              >
+
+                <button
+                  class="btn btn-danger"
+                  onclick="removeTransactionItem(
+                    ${index}
+                  )"
+                  ${
+                    transactionItems.length === 1
+                      ? 'disabled'
+                      : ''
+                  }
+                >
+                  🗑️ Hapus
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <div
+              style="
+                text-align:right;
+                font-weight:700;
+                margin-top:10px;
+              "
+            >
+
+              Subtotal:
+              ${formatRupiah(
+                Math.max(
+                  0,
+                  Number(item.qty || 0) *
+                  Number(item.harga || 0) -
+                  Number(item.diskon || 0)
+                )
+              )}
+
+            </div>
+
+          </div>
+
+        `;
+
+      }
+    ).join('');
+
+
+  calculateTransactionTotal();
+
+}
+
+
+/* ============================================================
+ * UPDATE ITEM
+ * ============================================================ */
+function updateTransactionItem(
+  index,
+  field,
+  value
+) {
+
+  if (
+    !transactionItems[index]
+  ) {
+    return;
+  }
+
+
+  if (
+    field === 'qty' ||
+    field === 'harga' ||
+    field === 'diskon'
+  ) {
+
+    transactionItems[index][field] =
+      Number(value || 0);
+
+  } else {
+
+    transactionItems[index][field] =
+      value;
+
+  }
+
+
+  renderTransactionItems();
+
+}
+
+
+/* ============================================================
+ * REMOVE ITEM
+ * ============================================================ */
+function removeTransactionItem(
+  index
+) {
+
+  if (
+    transactionItems.length <= 1
+  ) {
+    return;
+  }
+
+
+  transactionItems.splice(
+    index,
+    1
+  );
+
+
+  renderTransactionItems();
+
+}
+
+
+/* ============================================================
+ * CALCULATE TOTAL
+ * ============================================================ */
+function calculateTransactionTotal() {
+
+  let total = 0;
+
+
+  transactionItems.forEach(
+    function(item) {
+
+      total += Math.max(
+        0,
+        Number(item.qty || 0) *
+        Number(item.harga || 0) -
+        Number(item.diskon || 0)
+      );
+
+    }
+  );
+
+
+  const diskon =
+    Number(
+      document.getElementById(
+        'transactionFormDiskon'
+      )?.value || 0
+    );
+
+
+  const grandTotal =
+    Math.max(
+      0,
+      total - diskon
+    );
+
+
+  const totalEl =
+    document.getElementById(
+      'transactionFormTotal'
+    );
+
+  const grandTotalEl =
+    document.getElementById(
+      'transactionFormGrandTotal'
+    );
+
+
+  if (totalEl) {
+
+    totalEl.textContent =
+      formatRupiah(
+        total
+      );
+
+  }
+
+
+  if (grandTotalEl) {
+
+    grandTotalEl.textContent =
+      formatRupiah(
+        grandTotal
+      );
+
+  }
+
+}
+
+
+/* ============================================================
+ * SAVE TRANSACTION UI
+ * ============================================================ */
+function saveTransactionUI() {
+
+  if (
+    transactionItems.length === 0
+  ) {
+
+    showToast(
+      'Minimal satu item transaksi.'
+    );
+
+    return;
+
+  }
+
+
+  const data = {
+
+    jenisTransaksi:
+      document.getElementById(
+        'transactionFormJenis'
+      ).value,
+
+    tanggal:
+      document.getElementById(
+        'transactionFormTanggal'
+      ).value,
+
+    noRM:
+      document.getElementById(
+        'transactionFormNoRM'
+      ).value.trim(),
+
+    kunjunganId:
+      document.getElementById(
+        'transactionFormKunjungan'
+      ).value.trim(),
+
+    keterangan:
+      document.getElementById(
+        'transactionFormKeterangan'
+      ).value.trim(),
+
+    diskon:
+      Number(
+        document.getElementById(
+          'transactionFormDiskon'
+        ).value || 0
+      ),
+
+    details:
+      transactionItems
+
+  };
+
+
+  showLoading(
+    'Menyimpan transaksi...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        hideLoading();
+
+        showToast(
+          result.message ||
+          'Transaksi berhasil disimpan.'
+        );
+
+        loadTransactionPage();
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .saveTransaction(
+      sessionToken,
+      data
+    );
+
+}
+
+
+/* ============================================================
+ * VIEW TRANSACTION
+ * ============================================================ */
+function viewTransaction(
+  transaksiId
+) {
+
+  showLoading(
+    'Memuat detail transaksi...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(data) {
+
+        hideLoading();
+
+        renderTransactionDetail(
+          data
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .getTransaction(
+      sessionToken,
+      transaksiId
+    );
+
+}
+
+
+/* ============================================================
+ * DETAIL TRANSACTION
+ * ============================================================ */
+function renderTransactionDetail(
+  item
+) {
+
+  document.getElementById(
+    'content'
+  ).innerHTML = `
+
+    <div class="page-header">
+
+      <div>
+
+        <h1 class="page-title">
+          💰 Detail Transaksi
+        </h1>
+
+        <div class="page-description">
+          ${escapeHTML(
+            item.transaksiId
+          )}
+        </div>
+
+      </div>
+
+
+      <button
+        class="btn btn-secondary"
+        onclick="loadTransactionPage()"
+      >
+        ← Kembali
+      </button>
+
+    </div>
+
+
+    <div class="card">
+
+      <div class="form-grid">
+
+        ${detailItem(
+          'No. Transaksi',
+          item.transaksiId
+        )}
+
+        ${detailItem(
+          'Tanggal',
+          item.tanggal
+        )}
+
+        ${detailItem(
+          'Jenis',
+          item.jenisTransaksi
+        )}
+
+        ${detailItem(
+          'No. RM',
+          item.noRM || '-'
+        )}
+
+        ${detailItem(
+          'Pasien',
+          item.namaPasien || '-'
+        )}
+
+        ${detailItem(
+          'Status',
+          item.status
+        )}
+
+      </div>
+
+    </div>
+
+
+    <div class="card">
+
+      <div class="card-title">
+        Detail Item
+      </div>
+
+
+      <div class="table-wrap">
+
+        <table>
+
+          <thead>
+
+            <tr>
+
+              <th>Item</th>
+              <th>Jenis</th>
+              <th>Qty</th>
+              <th>Harga</th>
+              <th>Diskon</th>
+              <th>Subtotal</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              (item.detail || [])
+                .map(
+                  function(detail) {
+
+                    return `
+
+                      <tr>
+
+                        <td>
+                          ${escapeHTML(
+                            detail.namaItem
+                          )}
+                        </td>
+
+                        <td>
+                          ${escapeHTML(
+                            detail.jenisItem
+                          )}
+                        </td>
+
+                        <td>
+                          ${formatNumber(
+                            detail.qty
+                          )}
+                        </td>
+
+                        <td>
+                          ${formatRupiah(
+                            detail.harga
+                          )}
+                        </td>
+
+                        <td>
+                          ${formatRupiah(
+                            detail.diskon
+                          )}
+                        </td>
+
+                        <td>
+                          <strong>
+                            ${formatRupiah(
+                              detail.subtotal
+                            )}
+                          </strong>
+                        </td>
+
+                      </tr>
+
+                    `;
+
+                  }
+                )
+                .join('')
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+
+      <div
+        style="
+          text-align:right;
+          margin-top:20px;
+        "
+      >
+
+        <div>
+          Total:
+          <strong>
+            ${formatRupiah(
+              item.total
+            )}
+          </strong>
+        </div>
+
+        <div>
+          Diskon:
+          <strong>
+            ${formatRupiah(
+              item.diskon
+            )}
+          </strong>
+        </div>
+
+        <div
+          style="
+            font-size:24px;
+            margin-top:8px;
+          "
+        >
+          Grand Total:
+          <strong>
+            ${formatRupiah(
+              item.grandTotal
+            )}
+          </strong>
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+/* ============================================================
+ * CANCEL TRANSACTION UI
+ * ============================================================ */
+function cancelTransactionUI(
+  transaksiId
+) {
+
+  if (
+    !confirm(
+      'Apakah Anda yakin ingin membatalkan transaksi ini?'
+    )
+  ) {
+
+    return;
+
+  }
+
+
+  showLoading(
+    'Membatalkan transaksi...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        hideLoading();
+
+        showToast(
+          result.message ||
+          'Transaksi berhasil dibatalkan.'
+        );
+
+        loadTransactions();
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .cancelTransaction(
+      sessionToken,
+      transaksiId
+    );
 
 }
 
