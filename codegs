@@ -16,15 +16,7 @@
  * - Antrian
  * - Pemeriksaan
  * - Rekam Medis
- *
- * PERBAIKAN V1 TAHAP 6:
- * - Sinkronisasi STATUS ANTRIAN dan KUNJUNGAN
- * - Rekam medis dapat disimpan jika ANTRIAN sudah DILAYANI
- *   walaupun STATUS KUNJUNGAN belum tersinkron
- * - Setelah rekam medis tersimpan:
- *      ANTRIAN   -> SELESAI
- *      KUNJUNGAN -> SELESAI
- * - getHeaderMap_ kompatibel dengan Sheet maupun Array Header
+ 
  *******************************************************/
 
 
