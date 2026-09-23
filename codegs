@@ -6375,6 +6375,7 @@ function updateVisitStatusDirect_(
 
 /* =====================================================
    RIWAYAT REKAM MEDIS PASIEN
+   KOMPATIBEL DENGAN STRUKTUR REKAM_MEDIS LAMA / BARU
    ===================================================== */
 
 function getPatientMedicalHistory(
@@ -6391,6 +6392,172 @@ function getPatientMedicalHistory(
     ).trim();
 
 
+  if (!pasienId) {
+
+    return [];
+
+  }
+
+
+  /* =====================================================
+     AMBIL DATA PASIEN
+     ===================================================== */
+
+  const pasienSheet =
+    getSheetByConfig(
+      'PASIEN'
+    );
+
+
+  const pasienValues =
+    pasienSheet
+      .getDataRange()
+      .getValues();
+
+
+  if (
+    pasienValues.length <= 1
+  ) {
+
+    return [];
+
+  }
+
+
+  const pasienMap =
+    getHeaderMap_(
+      pasienValues[0]
+    );
+
+
+  let targetNoRM =
+    '';
+
+
+  let targetPasienId =
+    pasienId;
+
+
+  /*
+   * Cari pasien berdasarkan PASIEN_ID.
+   * Jika struktur PASIEN tidak menggunakan PASIEN_ID,
+   * gunakan NO_RM sebagai identitas.
+   */
+
+  for (
+    let i = 1;
+    i < pasienValues.length;
+    i++
+  ) {
+
+    const row =
+      pasienValues[i];
+
+
+    const rowPasienId =
+      pasienMap.PASIEN_ID !== undefined
+        ? String(
+            row[
+              pasienMap.PASIEN_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    if (
+      rowPasienId &&
+      rowPasienId === pasienId
+    ) {
+
+      if (
+        pasienMap.NO_RM !==
+        undefined
+      ) {
+
+        targetNoRM =
+          String(
+            row[
+              pasienMap.NO_RM
+            ] || ''
+          ).trim();
+
+      }
+
+      break;
+
+    }
+
+  }
+
+
+  /*
+   * Jika tidak menemukan PASIEN_ID,
+   * kemungkinan parameter yang diterima adalah NO_RM.
+   */
+
+  if (!targetNoRM) {
+
+    if (
+      pasienMap.NO_RM !==
+      undefined
+    ) {
+
+      for (
+        let i = 1;
+        i < pasienValues.length;
+        i++
+      ) {
+
+        const row =
+          pasienValues[i];
+
+
+        const noRM =
+          String(
+            row[
+              pasienMap.NO_RM
+            ] || ''
+          ).trim();
+
+
+        if (
+          noRM === pasienId
+        ) {
+
+          targetNoRM =
+            noRM;
+
+
+          if (
+            pasienMap.PASIEN_ID !==
+            undefined
+          ) {
+
+            targetPasienId =
+              String(
+                row[
+                  pasienMap.PASIEN_ID
+                ] || ''
+              ).trim();
+
+          }
+
+
+          break;
+
+        }
+
+      }
+
+    }
+
+  }
+
+
+  /* =====================================================
+     BACA REKAM MEDIS
+     ===================================================== */
+
   const sheet =
     getSheetByConfig(
       'REKAM_MEDIS'
@@ -6403,8 +6570,12 @@ function getPatientMedicalHistory(
       .getValues();
 
 
-  if (values.length <= 1) {
+  if (
+    values.length <= 1
+  ) {
+
     return [];
+
   }
 
 
@@ -6417,6 +6588,48 @@ function getPatientMedicalHistory(
   const result = [];
 
 
+  /* =====================================================
+     HELPER AMBIL NILAI KOLOM
+     ===================================================== */
+
+  function getValue(
+    row,
+    names
+  ) {
+
+    for (
+      let i = 0;
+      i < names.length;
+      i++
+    ) {
+
+      const name =
+        names[i];
+
+
+      if (
+        map[name] !==
+        undefined
+      ) {
+
+        return row[
+          map[name]
+        ];
+
+      }
+
+    }
+
+
+    return '';
+
+  }
+
+
+  /* =====================================================
+     LOOP REKAM MEDIS
+     ===================================================== */
+
   for (
     let i = 1;
     i < values.length;
@@ -6427,128 +6640,271 @@ function getPatientMedicalHistory(
       values[i];
 
 
-    if (
+    const rowPasienId =
+      getValue(
+        row,
+        [
+          'PASIEN_ID'
+        ]
+      );
+
+
+    const rowNoRM =
       String(
-        row[
-          map.PASIEN_ID
-        ] || ''
-      ) !==
-      pasienId
+        getValue(
+          row,
+          [
+            'NO_RM'
+          ]
+        ) || ''
+      ).trim();
+
+
+    let cocok =
+      false;
+
+
+    /*
+     * PRIORITAS 1:
+     * PASIEN_ID jika kolom tersedia
+     */
+
+    if (
+      rowPasienId &&
+      targetPasienId &&
+      String(
+        rowPasienId
+      ).trim() ===
+        String(
+          targetPasienId
+        ).trim()
     ) {
+
+      cocok = true;
+
+    }
+
+
+    /*
+     * PRIORITAS 2:
+     * NO_RM
+     *
+     * Ini yang digunakan untuk
+     * struktur Sheet Anda sekarang.
+     */
+
+    if (
+      !cocok &&
+      targetNoRM &&
+      rowNoRM &&
+      rowNoRM ===
+        targetNoRM
+    ) {
+
+      cocok = true;
+
+    }
+
+
+    /*
+     * Jika belum cocok dan parameter
+     * langsung merupakan NO_RM.
+     */
+
+    if (
+      !cocok &&
+      rowNoRM &&
+      rowNoRM ===
+        pasienId
+    ) {
+
+      cocok = true;
+
+    }
+
+
+    if (!cocok) {
 
       continue;
 
     }
 
 
+    /* =================================================
+       MASUKKAN KE HASIL
+       ================================================= */
+
+    const tanggal =
+      getValue(
+        row,
+        [
+          'TANGGAL'
+        ]
+      );
+
+
+    const rekamMedisId =
+      getValue(
+        row,
+        [
+          'REKAM_MEDIS_ID',
+          'RM_ID'
+        ]
+      );
+
+
+    const anamnesis =
+      getValue(
+        row,
+        [
+          'ANAMNESIS',
+          'KELUHAN'
+        ]
+      );
+
+
+    const catatan =
+      getValue(
+        row,
+        [
+          'CATATAN_BIDAN',
+          'CATATAN'
+        ]
+      );
+
+
     result.push({
 
       rekamMedisId:
         String(
-          row[
-            map.REKAM_MEDIS_ID
-          ] || ''
+          rekamMedisId || ''
         ),
 
       kunjunganId:
         String(
-          row[
-            map.KUNJUNGAN_ID
-          ] || ''
+          getValue(
+            row,
+            [
+              'KUNJUNGAN_ID'
+            ]
+          ) || ''
         ),
 
       tanggal:
-        row[
-          map.TANGGAL
-        ]
+        tanggal
           ? formatDateTime_(
-              row[
-                map.TANGGAL
-              ]
+              tanggal
             )
           : '',
 
       anamnesis:
         String(
-          row[
-            map.ANAMNESIS
-          ] || ''
+          anamnesis || ''
         ),
 
       tekananDarah:
         String(
-          row[
-            map.TEKANAN_DARAH
-          ] || ''
+          getValue(
+            row,
+            [
+              'TEKANAN_DARAH'
+            ]
+          ) || ''
         ),
 
       nadi:
         String(
-          row[
-            map.NADI
-          ] || ''
+          getValue(
+            row,
+            [
+              'NADI'
+            ]
+          ) || ''
         ),
 
       suhu:
         String(
-          row[
-            map.SUHU
-          ] || ''
+          getValue(
+            row,
+            [
+              'SUHU'
+            ]
+          ) || ''
         ),
 
       respirasi:
         String(
-          row[
-            map.RESPIRASI
-          ] || ''
+          getValue(
+            row,
+            [
+              'RESPIRASI'
+            ]
+          ) || ''
         ),
 
       beratBadan:
         String(
-          row[
-            map.BERAT_BADAN
-          ] || ''
+          getValue(
+            row,
+            [
+              'BERAT_BADAN'
+            ]
+          ) || ''
         ),
 
       tinggiBadan:
         String(
-          row[
-            map.TINGGI_BADAN
-          ] || ''
+          getValue(
+            row,
+            [
+              'TINGGI_BADAN'
+            ]
+          ) || ''
         ),
 
       pemeriksaanFisik:
         String(
-          row[
-            map.PEMERIKSAAN_FISIK
-          ] || ''
+          getValue(
+            row,
+            [
+              'PEMERIKSAAN_FISIK'
+            ]
+          ) || ''
         ),
 
       diagnosis:
         String(
-          row[
-            map.DIAGNOSIS
-          ] || ''
+          getValue(
+            row,
+            [
+              'DIAGNOSIS'
+            ]
+          ) || ''
         ),
 
       tindakan:
         String(
-          row[
-            map.TINDAKAN
-          ] || ''
+          getValue(
+            row,
+            [
+              'TINDAKAN'
+            ]
+          ) || ''
         ),
 
       catatanBidan:
         String(
-          row[
-            map.CATATAN_BIDAN
-          ] || ''
+          catatan || ''
         )
 
     });
 
   }
 
+
+  /* =====================================================
+     TERBARU DI ATAS
+     ===================================================== */
 
   result.reverse();
 
