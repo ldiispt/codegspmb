@@ -1884,7 +1884,8 @@ function findPatientById_(
 
 
 /* =====================================================
-   RIWAYAT KUNJUNGAN
+   RIWAYAT KUNJUNGAN PASIEN
+   Kompatibel dengan struktur KUNJUNGAN V1
    ===================================================== */
 
 function getPatientVisits_(
@@ -1892,7 +1893,10 @@ function getPatientVisits_(
 ) {
 
   const sheet =
-    getSheetByConfig('KUNJUNGAN');
+    getSheetByConfig(
+      'KUNJUNGAN'
+    );
+
 
   const values =
     sheet
@@ -1900,16 +1904,78 @@ function getPatientVisits_(
       .getValues();
 
 
-  if (values.length < 2) {
+  if (
+    values.length < 2
+  ) {
+
     return [];
+
   }
 
 
   const map =
-    getHeaderMap_(sheet);
+    getHeaderMap_(
+      sheet
+    );
+
 
   const result = [];
 
+
+  const targetRM =
+    String(
+      noRM || ''
+    ).trim();
+
+
+  if (!targetRM) {
+
+    return [];
+
+  }
+
+
+  /* =====================================================
+     HELPER
+     Mendukung nama kolom lama dan struktur V1 sekarang
+     ===================================================== */
+
+  function getColumnValue(
+    row,
+    names
+  ) {
+
+    for (
+      let i = 0;
+      i < names.length;
+      i++
+    ) {
+
+      const name =
+        names[i];
+
+
+      if (
+        map[name] !== undefined
+      ) {
+
+        return row[
+          map[name]
+        ];
+
+      }
+
+    }
+
+
+    return '';
+
+  }
+
+
+  /* =====================================================
+     LOOP DATA KUNJUNGAN
+     ===================================================== */
 
   for (
     let i = 1;
@@ -1917,13 +1983,27 @@ function getPatientVisits_(
     i++
   ) {
 
-    if (
+    const row =
+      values[i];
+
+
+    const rowRM =
       String(
-        values[i][
-          map.NO_RM
-        ] || ''
-      ) !==
-      String(noRM || '')
+        getColumnValue(
+          row,
+          [
+            'NO_RM'
+          ]
+        ) || ''
+      ).trim();
+
+
+    /*
+     * Cocokkan berdasarkan NO_RM
+     */
+
+    if (
+      rowRM !== targetRM
     ) {
 
       continue;
@@ -1931,41 +2011,107 @@ function getPatientVisits_(
     }
 
 
+    /* =================================================
+       AMBIL DATA
+       ================================================= */
+
+    const kunjunganId =
+      getColumnValue(
+        row,
+        [
+          'KUNJUNGAN_ID'
+        ]
+      );
+
+
+    const tanggal =
+      getColumnValue(
+        row,
+        [
+          'TANGGAL_KUNJUNGAN',
+          'TANGGAL'
+        ]
+      );
+
+
+    const jenisPelayanan =
+      getColumnValue(
+        row,
+        [
+          'JENIS_PELAYANAN',
+          'JENIS_KUNJUNGAN'
+        ]
+      );
+
+
+    const keluhan =
+      getColumnValue(
+        row,
+        [
+          'KELUHAN',
+          'KELUHAN_UTAMA'
+        ]
+      );
+
+
+    const status =
+      getColumnValue(
+        row,
+        [
+          'STATUS',
+          'STATUS_KUNJUNGAN'
+        ]
+      );
+
+
+    /* =================================================
+       MASUKKAN HASIL
+       ================================================= */
+
     result.push({
 
       kunjunganId:
-        values[i][
-          map.KUNJUNGAN_ID
-        ] || '',
-
-      tanggal:
-        formatDate_(
-          values[i][
-            map.TANGGAL
-          ]
+        String(
+          kunjunganId || ''
         ),
 
+
+      tanggal:
+        tanggal
+          ? formatDate_(
+              tanggal
+            )
+          : '',
+
+
       jenisPelayanan:
-        values[i][
-          map.JENIS_PELAYANAN
-        ] || '',
+        String(
+          jenisPelayanan || ''
+        ),
+
 
       keluhan:
-        values[i][
-          map.KELUHAN
-        ] || '',
+        String(
+          keluhan || ''
+        ),
+
 
       status:
-        values[i][
-          map.STATUS
-        ] || ''
+        String(
+          status || ''
+        )
 
     });
 
   }
 
 
+  /* =====================================================
+     TERBARU DI ATAS
+     ===================================================== */
+
   result.reverse();
+
 
   return result;
 
