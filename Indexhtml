@@ -6488,7 +6488,7 @@ function renderMedicalPatientTable(data) {
               <td><span class="badge badge-active">AKTIF</span></td>
               <td><div class="action-group">
                 <button class="btn btn-primary btn-small" onclick="openMedicalHistory('${escapeAttr(p.pasienId)}')">📋 Riwayat</button>
-                <button class="btn btn-secondary btn-small" onclick="openPatientDetail('${escapeAttr(p.pasienId)}')">👤 Detail</button>
+                <button class="btn btn-secondary btn-small" onclick="viewPatient('${escapeAttr(p.pasienId)}')">👤 Detail</button>
               </div></td>
             </tr>`; }).join('')}
         </tbody>
