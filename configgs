@@ -1,0 +1,234 @@
+/**
+ * ============================================================
+ * PMB SETIAWATI V1
+ * CONFIGURATION
+ * ============================================================
+ */
+
+const PMB_CONFIG = {
+
+  APP_NAME: 'PMB SETIAWATI',
+
+  APP_VERSION: 'V1.0.0',
+
+  CLINIC_NAME: 'PMB SETIAWATI',
+
+  CLINIC_TYPE: 'PRAKTIK MANDIRI BIDAN',
+
+  ADDRESS: 'Jalan Gunung Slamet No. 86, Sampit',
+
+  CITY: 'Sampit',
+
+  TIMEZONE: 'Asia/Jakarta',
+
+  RM_PREFIX: 'PMB-',
+
+  TRANSACTION_PREFIX: 'TRX-',
+
+  QUEUE_PREFIX: 'A',
+
+  DEFAULT_ROLE: 'ADMIN',
+
+  DEFAULT_STATUS: 'AKTIF',
+
+  /*
+   * ==========================================================
+   * ISI DENGAN ID GOOGLE SPREADSHEET DATABASE PMB
+   * ==========================================================
+   *
+   * Contoh:
+   *
+   * DATABASE_SPREADSHEET_ID:
+   * '1AbCdEfGhIjKlMnOpQrStUvWxYz'
+   *
+   */
+
+  DATABASE_SPREADSHEET_ID:
+    '1J2F1O8B7BeUSvCX8I0xHVevTfcU8L6s8lkvzO4Ba_2I',
+
+
+  SHEETS: {
+
+    CONFIG: 'CONFIG',
+
+    USERS: 'USERS',
+
+    PASIEN: 'PASIEN',
+
+    KUNJUNGAN: 'KUNJUNGAN',
+
+    ANTRIAN: 'ANTRIAN',
+
+    REKAM_MEDIS: 'REKAM_MEDIS',
+
+    TINDAKAN: 'TINDAKAN',
+
+    OBAT: 'OBAT',
+
+    RESEP: 'RESEP',
+
+    RESEP_DETAIL: 'RESEP_DETAIL',
+
+    TRANSAKSI: 'TRANSAKSI',
+
+    TRANSAKSI_DETAIL: 'TRANSAKSI_DETAIL',
+
+    PEMBAYARAN: 'PEMBAYARAN',
+
+    AUDIT_LOG: 'AUDIT_LOG'
+
+  }
+
+};
+
+
+/**
+ * ============================================================
+ * MENGAMBIL DATABASE
+ * ============================================================
+ */
+
+function getDatabase() {
+
+  /*
+   * Jika ID sudah diisi, gunakan ID tersebut.
+   */
+
+  const spreadsheetId =
+    String(
+      PMB_CONFIG.DATABASE_SPREADSHEET_ID || ''
+    ).trim();
+
+
+  if (
+    spreadsheetId &&
+    spreadsheetId !==
+      'MASUKKAN_ID_SPREADSHEET_DI_SINI'
+  ) {
+
+    try {
+
+      return SpreadsheetApp
+        .openById(spreadsheetId);
+
+    } catch (error) {
+
+      throw new Error(
+        'Google Spreadsheet database tidak dapat dibuka.\n\n' +
+        'Pastikan DATABASE_SPREADSHEET_ID benar dan ' +
+        'akun Apps Script memiliki akses ke Spreadsheet tersebut.\n\n' +
+        'Detail: ' +
+        error.message
+      );
+
+    }
+
+  }
+
+
+  /*
+   * Fallback:
+   * jika Apps Script memang terikat langsung
+   * dengan Google Spreadsheet.
+   */
+
+  const active =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+
+  if (active) {
+
+    return active;
+
+  }
+
+
+  throw new Error(
+    'Spreadsheet database belum ditentukan.\n\n' +
+    'Silakan isi DATABASE_SPREADSHEET_ID di Config.gs ' +
+    'dengan ID Google Spreadsheet database PMB SETIAWATI.'
+  );
+
+}
+
+
+/**
+ * ============================================================
+ * TIMEZONE
+ * ============================================================
+ */
+
+function getAppTimezone() {
+
+  return PMB_CONFIG.TIMEZONE;
+
+}
+
+
+/**
+ * ============================================================
+ * FORMAT TANGGAL DAN WAKTU
+ * ============================================================
+ */
+
+function formatDateTime(date) {
+
+  if (!date) {
+
+    date = new Date();
+
+  }
+
+
+  return Utilities.formatDate(
+
+    date,
+
+    PMB_CONFIG.TIMEZONE,
+
+    'dd/MM/yyyy HH:mm:ss'
+
+  );
+
+}
+
+
+/**
+ * ============================================================
+ * FORMAT TANGGAL
+ * ============================================================
+ */
+
+function formatDate(date) {
+
+  if (!date) {
+
+    date = new Date();
+
+  }
+
+
+  return Utilities.formatDate(
+
+    date,
+
+    PMB_CONFIG.TIMEZONE,
+
+    'dd/MM/yyyy'
+
+  );
+
+}
+
+
+/**
+ * ============================================================
+ * UUID
+ * ============================================================
+ */
+
+function generateUUID() {
+
+  return Utilities.getUuid();
+
+}
