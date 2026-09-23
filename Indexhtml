@@ -1037,6 +1037,373 @@
  .medical-history-grid{grid-template-columns:1fr}
 }
 
+/* =====================================================
+   TAHAP 9C — LAPORAN KEUANGAN
+   ===================================================== */
+
+.financial-report-page {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.financial-report-header {
+  margin-bottom: 22px;
+}
+
+.financial-report-header h2 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.financial-report-header p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.financial-report-filter {
+  display: grid;
+  grid-template-columns:
+    minmax(160px, 1fr)
+    minmax(160px, 1fr)
+    minmax(180px, 1fr)
+    auto;
+
+  gap: 14px;
+
+  padding: 18px;
+
+  margin-bottom: 20px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+
+  border-radius: 14px;
+
+  box-shadow:
+    0 2px 8px
+    rgba(0, 0, 0, 0.04);
+
+  align-items: end;
+}
+
+.financial-report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.financial-report-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.financial-report-field input,
+.financial-report-field select {
+  width: 100%;
+  box-sizing: border-box;
+
+  min-height: 42px;
+
+  padding: 9px 11px;
+
+  border: 1px solid #d1d5db;
+
+  border-radius: 9px;
+
+  background: #ffffff;
+
+  font-size: 14px;
+
+  outline: none;
+}
+
+.financial-report-field input:focus,
+.financial-report-field select:focus {
+  border-color: #6b7280;
+}
+
+.financial-report-action {
+  display: flex;
+}
+
+.financial-report-button {
+  min-height: 42px;
+
+  padding: 9px 18px;
+
+  border: 0;
+
+  border-radius: 9px;
+
+  cursor: pointer;
+
+  font-weight: 600;
+
+  background: #111827;
+
+  color: #ffffff;
+
+  transition:
+    opacity 0.2s ease,
+    transform 0.1s ease;
+}
+
+.financial-report-button:hover {
+  opacity: 0.9;
+}
+
+.financial-report-button:active {
+  transform: translateY(1px);
+}
+
+.financial-report-button:disabled {
+  opacity: 0.6;
+
+  cursor: not-allowed;
+}
+
+.financial-report-summary {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 14px;
+
+  margin-bottom: 20px;
+}
+
+.financial-report-card {
+  display: flex;
+
+  align-items: center;
+
+  gap: 13px;
+
+  padding: 18px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+
+  border-radius: 14px;
+
+  box-shadow:
+    0 2px 8px
+    rgba(0, 0, 0, 0.04);
+}
+
+.financial-report-card-icon {
+  width: 42px;
+
+  height: 42px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border-radius: 11px;
+
+  background: #f3f4f6;
+
+  font-size: 20px;
+
+  flex-shrink: 0;
+}
+
+.financial-report-card-label {
+  margin-bottom: 4px;
+
+  font-size: 12px;
+
+  color: #6b7280;
+
+  font-weight: 600;
+
+  text-transform: uppercase;
+}
+
+.financial-report-card-value {
+  font-size: 20px;
+
+  font-weight: 700;
+
+  color: #111827;
+}
+
+.financial-report-table-wrapper {
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+
+  border-radius: 14px;
+
+  overflow: hidden;
+
+  box-shadow:
+    0 2px 8px
+    rgba(0, 0, 0, 0.04);
+}
+
+.financial-report-table-header {
+  padding: 18px 20px;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.financial-report-table-header h3 {
+  margin: 0;
+
+  font-size: 17px;
+}
+
+.financial-report-table-scroll {
+  width: 100%;
+
+  overflow-x: auto;
+}
+
+.financial-report-table {
+  width: 100%;
+
+  border-collapse: collapse;
+
+  min-width: 850px;
+
+  font-size: 13px;
+}
+
+.financial-report-table th {
+  padding: 12px 14px;
+
+  text-align: left;
+
+  background: #f9fafb;
+
+  color: #374151;
+
+  font-weight: 700;
+
+  white-space: nowrap;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.financial-report-table td {
+  padding: 12px 14px;
+
+  border-bottom: 1px solid #f0f0f0;
+
+  color: #374151;
+
+  vertical-align: middle;
+}
+
+.financial-report-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.financial-report-income {
+  display: inline-block;
+
+  padding: 4px 8px;
+
+  border-radius: 999px;
+
+  font-size: 11px;
+
+  font-weight: 700;
+
+  background: #ecfdf5;
+
+  color: #047857;
+}
+
+.financial-report-expense {
+  display: inline-block;
+
+  padding: 4px 8px;
+
+  border-radius: 999px;
+
+  font-size: 11px;
+
+  font-weight: 700;
+
+  background: #fef2f2;
+
+  color: #b91c1c;
+}
+
+.financial-report-loading,
+.financial-report-empty,
+.financial-report-error {
+  padding: 40px 20px;
+
+  text-align: center;
+
+  color: #6b7280;
+}
+
+.financial-report-empty-icon {
+  font-size: 32px;
+
+  margin-bottom: 8px;
+}
+
+.financial-report-error {
+  color: #b91c1c;
+
+  background: #fef2f2;
+}
+
+@media (max-width: 900px) {
+
+  .financial-report-filter {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .financial-report-action {
+    grid-column: 1 / -1;
+  }
+
+  .financial-report-button {
+    width: 100%;
+  }
+
+  .financial-report-summary {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+}
+
+@media (max-width: 600px) {
+
+  .financial-report-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .financial-report-action {
+    grid-column: auto;
+  }
+
+  .financial-report-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .financial-report-card-value {
+    font-size: 18px;
+  }
+
+}
+
   </style>
 
 </head>
@@ -1257,7 +1624,7 @@
 
       <div
         class="menu-item"
-        onclick="placeholderPage('Laporan')"
+        onclick="showPage('laporan', this)"
       >
         <span class="menu-icon">📊</span>
         Laporan
@@ -7770,6 +8137,11 @@ function toggleMedicineStatus(
     if (page === 'farmasi') { document.getElementById('topbarTitle').textContent = 'Pelayanan Farmasi'; loadPharmacyPage();return; }
     if (page === 'transaksi') { document.getElementById('topbarTitle').textContent = 'Transaksi'; loadTransactionPage(); return; }
     if (page === 'pembayaran') { document.getElementById('topbarTitle').textContent = 'Pembayaran'; loadPaymentPage(); return; }
+    if (page === 'laporan') {
+  document.getElementById('topbarTitle').textContent = 'Laporan';
+  loadFinancialReportPage();
+  return;
+}
 
   placeholderPage(page);
   };
@@ -16052,6 +16424,947 @@ function renderPaymentHistory(
 
   container.innerHTML =
     html;
+
+}
+
+/* =====================================================
+   TAHAP 9C — LAPORAN KEUANGAN
+   FRONTEND ONLY
+   ===================================================== */
+
+let financialReportData = [];
+
+
+/* =====================================================
+   LOAD HALAMAN LAPORAN
+   ===================================================== */
+
+function loadFinancialReportPage() {
+
+  const content =
+    document.getElementById('content');
+
+  if (!content) {
+    return;
+  }
+
+
+  const today =
+    new Date();
+
+  const year =
+    today.getFullYear();
+
+  const month =
+    String(
+      today.getMonth() + 1
+    ).padStart(2, '0');
+
+  const day =
+    String(
+      today.getDate()
+    ).padStart(2, '0');
+
+  const todayString =
+    year +
+    '-' +
+    month +
+    '-' +
+    day;
+
+
+  content.innerHTML = `
+
+    <div class="financial-report-page">
+
+      <div class="financial-report-header">
+
+        <div>
+          <h2>📊 Laporan Keuangan</h2>
+
+          <p>
+            Rekap transaksi pendapatan dan pengeluaran
+          </p>
+        </div>
+
+      </div>
+
+
+      <!-- FILTER -->
+
+      <div class="financial-report-filter">
+
+        <div class="financial-report-field">
+
+          <label>
+            Tanggal Mulai
+          </label>
+
+          <input
+            type="date"
+            id="financialReportStartDate"
+            value="${todayString}"
+          >
+
+        </div>
+
+
+        <div class="financial-report-field">
+
+          <label>
+            Tanggal Selesai
+          </label>
+
+          <input
+            type="date"
+            id="financialReportEndDate"
+            value="${todayString}"
+          >
+
+        </div>
+
+
+        <div class="financial-report-field">
+
+          <label>
+            Jenis Transaksi
+          </label>
+
+          <select
+            id="financialReportType"
+          >
+
+            <option value="SEMUA">
+              Semua
+            </option>
+
+            <option value="PENDAPATAN">
+              Pendapatan
+            </option>
+
+            <option value="PENGELUARAN">
+              Pengeluaran
+            </option>
+
+          </select>
+
+        </div>
+
+
+        <div class="financial-report-action">
+
+          <button
+            type="button"
+            id="btnFinancialReport"
+            class="financial-report-button"
+          >
+            🔍 Tampilkan
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- SUMMARY -->
+
+      <div
+        id="financialReportSummary"
+        class="financial-report-summary"
+      >
+
+        <div class="financial-report-card">
+
+          <div class="financial-report-card-icon">
+            💰
+          </div>
+
+          <div>
+
+            <div class="financial-report-card-label">
+              Pendapatan
+            </div>
+
+            <div
+              id="financialReportIncome"
+              class="financial-report-card-value"
+            >
+              Rp0
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="financial-report-card">
+
+          <div class="financial-report-card-icon">
+            💸
+          </div>
+
+          <div>
+
+            <div class="financial-report-card-label">
+              Pengeluaran
+            </div>
+
+            <div
+              id="financialReportExpense"
+              class="financial-report-card-value"
+            >
+              Rp0
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="financial-report-card">
+
+          <div class="financial-report-card-icon">
+            📈
+          </div>
+
+          <div>
+
+            <div class="financial-report-card-label">
+              Saldo Bersih
+            </div>
+
+            <div
+              id="financialReportBalance"
+              class="financial-report-card-value"
+            >
+              Rp0
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="financial-report-card">
+
+          <div class="financial-report-card-icon">
+            🧾
+          </div>
+
+          <div>
+
+            <div class="financial-report-card-label">
+              Jumlah Transaksi
+            </div>
+
+            <div
+              id="financialReportCount"
+              class="financial-report-card-value"
+            >
+              0
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- TABLE -->
+
+      <div class="financial-report-table-wrapper">
+
+        <div class="financial-report-table-header">
+
+          <h3>
+            Detail Transaksi
+          </h3>
+
+        </div>
+
+
+        <div
+          id="financialReportTableContainer"
+        >
+
+          <div class="financial-report-loading">
+            Memuat laporan...
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  /*
+   * Event listener
+   * sengaja digunakan, bukan inline onclick.
+   */
+
+  const button =
+    document.getElementById(
+      'btnFinancialReport'
+    );
+
+
+  if (button) {
+
+    button.addEventListener(
+      'click',
+      function() {
+
+        loadFinancialReport();
+
+      }
+    );
+
+  }
+
+
+  /*
+   * Tampilkan laporan hari ini
+   * secara otomatis.
+   */
+
+  loadFinancialReport();
+
+}
+
+
+/* =====================================================
+   LOAD DATA LAPORAN
+   ===================================================== */
+
+function loadFinancialReport() {
+
+  const startDate =
+    document.getElementById(
+      'financialReportStartDate'
+    );
+
+  const endDate =
+    document.getElementById(
+      'financialReportEndDate'
+    );
+
+  const type =
+    document.getElementById(
+      'financialReportType'
+    );
+
+  if (
+    !startDate ||
+    !endDate ||
+    !type
+  ) {
+
+    return;
+
+  }
+
+
+  const tanggalMulai =
+    startDate.value;
+
+  const tanggalSelesai =
+    endDate.value;
+
+  const jenis =
+    type.value;
+
+
+  if (!tanggalMulai || !tanggalSelesai) {
+
+    alert(
+      'Tanggal laporan wajib diisi.'
+    );
+
+    return;
+
+  }
+
+
+  if (
+    tanggalMulai >
+    tanggalSelesai
+  ) {
+
+    alert(
+      'Tanggal mulai tidak boleh lebih besar dari tanggal selesai.'
+    );
+
+    return;
+
+  }
+
+
+  const button =
+    document.getElementById(
+      'btnFinancialReport'
+    );
+
+
+  if (button) {
+
+    button.disabled = true;
+
+    button.innerHTML =
+      '⏳ Memuat...';
+
+  }
+
+
+  const tableContainer =
+    document.getElementById(
+      'financialReportTableContainer'
+    );
+
+
+  if (tableContainer) {
+
+    tableContainer.innerHTML = `
+      <div class="financial-report-loading">
+        Memuat laporan keuangan...
+      </div>
+    `;
+
+  }
+
+
+  /*
+   * Gunakan token session aplikasi yang sudah ada.
+   */
+
+  const token = sessionToken;
+
+
+  if (!token) {
+
+    if (button) {
+
+      button.disabled = false;
+
+      button.innerHTML =
+        '🔍 Tampilkan';
+
+    }
+
+    alert(
+      'Session tidak ditemukan. Silakan login kembali.'
+    );
+
+    return;
+
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        if (button) {
+
+          button.disabled = false;
+
+          button.innerHTML =
+            '🔍 Tampilkan';
+
+        }
+
+
+        if (
+          !result ||
+          result.success !== true
+        ) {
+
+          renderFinancialReportError(
+            'Laporan keuangan gagal dimuat.'
+          );
+
+          return;
+
+        }
+
+
+        financialReportData =
+          Array.isArray(result.data)
+            ? result.data
+            : [];
+
+
+        renderFinancialReport(
+          result
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        if (button) {
+
+          button.disabled = false;
+
+          button.innerHTML =
+            '🔍 Tampilkan';
+
+        }
+
+
+        renderFinancialReportError(
+          error &&
+          error.message
+            ? error.message
+            : 'Terjadi kesalahan saat memuat laporan.'
+        );
+
+      }
+    )
+
+    .getFinancialReport(
+      token,
+      tanggalMulai,
+      tanggalSelesai,
+      jenis
+    );
+
+}
+
+
+/* =====================================================
+   RENDER LAPORAN
+   ===================================================== */
+
+function renderFinancialReport(
+  result
+) {
+
+  const summary =
+    result.summary || {};
+
+
+  const income =
+    Number(
+      summary.pendapatan || 0
+    );
+
+
+  const expense =
+    Number(
+      summary.pengeluaran || 0
+    );
+
+
+  const balance =
+    Number(
+      summary.saldoBersih || 0
+    );
+
+
+  const count =
+    Number(
+      summary.jumlahTransaksi || 0
+    );
+
+
+  const incomeEl =
+    document.getElementById(
+      'financialReportIncome'
+    );
+
+
+  const expenseEl =
+    document.getElementById(
+      'financialReportExpense'
+    );
+
+
+  const balanceEl =
+    document.getElementById(
+      'financialReportBalance'
+    );
+
+
+  const countEl =
+    document.getElementById(
+      'financialReportCount'
+    );
+
+
+  if (incomeEl) {
+
+    incomeEl.textContent =
+      formatFinancialCurrency(
+        income
+      );
+
+  }
+
+
+  if (expenseEl) {
+
+    expenseEl.textContent =
+      formatFinancialCurrency(
+        expense
+      );
+
+  }
+
+
+  if (balanceEl) {
+
+    balanceEl.textContent =
+      formatFinancialCurrency(
+        balance
+      );
+
+  }
+
+
+  if (countEl) {
+
+    countEl.textContent =
+      count.toLocaleString(
+        'id-ID'
+      );
+
+  }
+
+
+  renderFinancialReportTable(
+    financialReportData
+  );
+
+}
+
+
+/* =====================================================
+   RENDER TABLE
+   ===================================================== */
+
+function renderFinancialReportTable(
+  rows
+) {
+
+  const container =
+    document.getElementById(
+      'financialReportTableContainer'
+    );
+
+
+  if (!container) {
+
+    return;
+
+  }
+
+
+  if (
+    !rows ||
+    rows.length === 0
+  ) {
+
+    container.innerHTML = `
+
+      <div class="financial-report-empty">
+
+        <div class="financial-report-empty-icon">
+          📊
+        </div>
+
+        <div>
+          Tidak ada transaksi pada periode yang dipilih.
+        </div>
+
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  let html = `
+
+    <div class="financial-report-table-scroll">
+
+      <table
+        class="financial-report-table"
+      >
+
+        <thead>
+
+          <tr>
+
+            <th>No</th>
+            <th>Tanggal</th>
+            <th>ID Transaksi</th>
+            <th>No. RM</th>
+            <th>Jenis</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Keterangan</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+  `;
+
+
+  rows.forEach(
+    function(item, index) {
+
+      const jenis =
+        String(
+          item.jenisTransaksi || ''
+        ).toUpperCase();
+
+
+      const jenisClass =
+        jenis === 'PENDAPATAN'
+          ? 'financial-report-income'
+          : 'financial-report-expense';
+
+
+      const jenisLabel =
+        jenis === 'PENDAPATAN'
+          ? 'Pendapatan'
+          : 'Pengeluaran';
+
+
+      html += `
+
+        <tr>
+
+          <td>
+            ${index + 1}
+          </td>
+
+          <td>
+            ${formatFinancialDate(
+              item.tanggal
+            )}
+          </td>
+
+          <td>
+            <strong>
+              ${escapeFinancialHtml(
+                item.transaksiId
+              )}
+            </strong>
+          </td>
+
+          <td>
+            ${escapeFinancialHtml(
+              item.noRM || '-'
+            )}
+          </td>
+
+          <td>
+
+            <span
+              class="${jenisClass}"
+            >
+              ${jenisLabel}
+            </span>
+
+          </td>
+
+          <td>
+            <strong>
+              ${formatFinancialCurrency(
+                Number(
+                  item.grandTotal ||
+                  item.total ||
+                  0
+                )
+              )}
+            </strong>
+          </td>
+
+          <td>
+            ${escapeFinancialHtml(
+              item.status || ''
+            )}
+          </td>
+
+          <td>
+            ${escapeFinancialHtml(
+              item.keterangan || '-'
+            )}
+          </td>
+
+        </tr>
+
+      `;
+
+    }
+  );
+
+
+  html += `
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+
+
+  container.innerHTML =
+    html;
+
+}
+
+
+/* =====================================================
+   ERROR
+   ===================================================== */
+
+function renderFinancialReportError(
+  message
+) {
+
+  const container =
+    document.getElementById(
+      'financialReportTableContainer'
+    );
+
+
+  if (!container) {
+
+    return;
+
+  }
+
+
+  container.innerHTML = `
+
+    <div class="financial-report-error">
+
+      ⚠️
+      ${escapeFinancialHtml(
+        message
+      )}
+
+    </div>
+
+  `;
+
+}
+
+
+/* =====================================================
+   FORMAT RUPIAH
+   ===================================================== */
+
+function formatFinancialCurrency(
+  value
+) {
+
+  return (
+    'Rp' +
+    Number(
+      value || 0
+    ).toLocaleString(
+      'id-ID'
+    )
+  );
+
+}
+
+
+/* =====================================================
+   FORMAT TANGGAL
+   ===================================================== */
+
+function formatFinancialDate(
+  value
+) {
+
+  if (!value) {
+
+    return '-';
+
+  }
+
+
+  const text =
+    String(value);
+
+
+  const match =
+    text.match(
+      /^(\d{4})-(\d{2})-(\d{2})/
+    );
+
+
+  if (match) {
+
+    return (
+      match[3] +
+      '/' +
+      match[2] +
+      '/' +
+      match[1]
+    );
+
+  }
+
+
+  return escapeFinancialHtml(
+    text
+  );
+
+}
+
+
+/* =====================================================
+   ESCAPE HTML
+   ===================================================== */
+
+function escapeFinancialHtml(
+  value
+) {
+
+  return String(
+    value == null
+      ? ''
+      : value
+  )
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+    .replace(
+      /</g,
+      '&lt;'
+    )
+    .replace(
+      />/g,
+      '&gt;'
+    )
+    .replace(
+      /"/g,
+      '&quot;'
+    )
+    .replace(
+      /'/g,
+      '&#039;'
+    );
 
 }
 
