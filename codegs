@@ -16180,3 +16180,661 @@ function getVisitBillingSummary(
   };
 
 }
+
+ 
+function getPaymentHistory(
+  token,
+  kunjunganId
+) {
+
+  requireSession_(token);
+
+
+  kunjunganId =
+    String(
+      kunjunganId || ''
+    ).trim();
+
+
+  if (!kunjunganId) {
+
+    throw new Error(
+      'Kunjungan tidak ditemukan.'
+    );
+
+  }
+
+
+  /* ========================================================
+     SHEET
+     ======================================================== */
+
+  const paymentSheet =
+    getSheetByConfig(
+      'PEMBAYARAN'
+    );
+
+
+  const transactionSheet =
+    getSheetByConfig(
+      'TRANSAKSI'
+    );
+
+
+  const paymentMap =
+    getHeaderMap_(
+      paymentSheet
+    );
+
+
+  const transactionMap =
+    getHeaderMap_(
+      transactionSheet
+    );
+
+
+  const paymentData =
+    paymentSheet
+      .getDataRange()
+      .getValues();
+
+
+  const transactionData =
+    transactionSheet
+      .getDataRange()
+      .getValues();
+
+
+  /* ========================================================
+     INDEX TRANSAKSI BERDASARKAN TRANSAKSI_ID
+     ======================================================== */
+
+  const transactionById = {};
+
+
+  for (
+    let i = 1;
+    i < transactionData.length;
+    i++
+  ) {
+
+    const row =
+      transactionData[i];
+
+
+    const transaksiId =
+      transactionMap.TRANSAKSI_ID !== undefined
+        ? String(
+            row[
+              transactionMap.TRANSAKSI_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    if (!transaksiId) {
+      continue;
+    }
+
+
+    const rowKunjunganId =
+      transactionMap.KUNJUNGAN_ID !== undefined
+        ? String(
+            row[
+              transactionMap.KUNJUNGAN_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const jenisTransaksi =
+      transactionMap.JENIS_TRANSAKSI !== undefined
+        ? String(
+            row[
+              transactionMap.JENIS_TRANSAKSI
+            ] || ''
+          )
+            .trim()
+            .toUpperCase()
+        : '';
+
+
+    const statusTransaksi =
+      transactionMap.STATUS !== undefined
+        ? String(
+            row[
+              transactionMap.STATUS
+            ] || ''
+          )
+            .trim()
+            .toUpperCase()
+        : '';
+
+
+    transactionById[
+      transaksiId
+    ] = {
+
+      kunjunganId:
+        rowKunjunganId,
+
+      jenisTransaksi:
+        jenisTransaksi,
+
+      status:
+        statusTransaksi
+
+    };
+
+  }
+
+
+  /* ========================================================
+     BACA PEMBAYARAN
+     ======================================================== */
+
+  const result = [];
+
+
+  for (
+    let i = 1;
+    i < paymentData.length;
+    i++
+  ) {
+
+    const row =
+      paymentData[i];
+
+
+    const transaksiId =
+      paymentMap.TRANSAKSI_ID !== undefined
+        ? String(
+            row[
+              paymentMap.TRANSAKSI_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    if (!transaksiId) {
+      continue;
+    }
+
+
+    const transaction =
+      transactionById[
+        transaksiId
+      ];
+
+
+    if (!transaction) {
+      continue;
+    }
+
+
+    /* ======================================================
+       HUBUNGKAN TRANSAKSI DENGAN KUNJUNGAN
+       ====================================================== */
+
+    if (
+      transaction.kunjunganId !==
+      kunjunganId
+    ) {
+
+      continue;
+
+    }
+
+
+    /* ======================================================
+       HANYA TRANSAKSI PENDAPATAN
+       ====================================================== */
+
+    if (
+      transaction.jenisTransaksi !==
+      'PENDAPATAN'
+    ) {
+
+      continue;
+
+    }
+
+
+    /* ======================================================
+       TRANSAKSI BATAL TIDAK DITAMPILKAN
+       ====================================================== */
+
+    if (
+      transaction.status ===
+      'BATAL'
+    ) {
+
+      continue;
+
+    }
+
+
+    /* ======================================================
+       DATA PEMBAYARAN
+       ====================================================== */
+
+    const pembayaranId =
+      paymentMap.PEMBAYARAN_ID !== undefined
+        ? String(
+            row[
+              paymentMap.PEMBAYARAN_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const tanggalRaw =
+      paymentMap.TANGGAL !== undefined
+        ? row[
+            paymentMap.TANGGAL
+      ]
+    : '';
+
+    const tanggal =
+      tanggalRaw instanceof Date
+      ? tanggalRaw.toISOString()
+      : String(
+        tanggalRaw || ''
+      );
+
+
+    const metodeBayar =
+      paymentMap.METODE_BAYAR !== undefined
+        ? String(
+            row[
+              paymentMap.METODE_BAYAR
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const jumlahBayar =
+      paymentMap.JUMLAH_BAYAR !== undefined
+        ? Number(
+            row[
+              paymentMap.JUMLAH_BAYAR
+            ] || 0
+          )
+        : 0;
+
+
+    const kembalian =
+      paymentMap.KEMBALIAN !== undefined
+        ? Number(
+            row[
+              paymentMap.KEMBALIAN
+            ] || 0
+          )
+        : 0;
+
+
+    const referensi =
+      paymentMap.REFERENSI !== undefined
+        ? String(
+            row[
+              paymentMap.REFERENSI
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const status =
+      paymentMap.STATUS !== undefined
+        ? String(
+            row[
+              paymentMap.STATUS
+            ] || ''
+          )
+            .trim()
+            .toUpperCase()
+        : '';
+
+
+    const catatan =
+      paymentMap.CATATAN !== undefined
+        ? String(
+            row[
+              paymentMap.CATATAN
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const dibayarOleh =
+      paymentMap.DIBAYAR_OLEH !== undefined
+        ? String(
+            row[
+              paymentMap.DIBAYAR_OLEH
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const createdAtRaw =
+  paymentMap.CREATED_AT !== undefined
+    ? row[
+        paymentMap.CREATED_AT
+      ]
+    : '';
+
+const createdAt =
+  createdAtRaw instanceof Date
+    ? createdAtRaw.toISOString()
+    : String(
+        createdAtRaw || ''
+      );
+
+
+    /* ======================================================
+       MASUKKAN KE HASIL
+       ====================================================== */
+
+    result.push({
+
+      pembayaranId:
+        pembayaranId,
+
+      transaksiId:
+        transaksiId,
+
+      tanggal:
+        tanggal,
+
+      metodeBayar:
+        metodeBayar,
+
+      jumlahBayar:
+        jumlahBayar,
+
+      kembalian:
+        kembalian,
+
+      jumlahEfektif:
+        Math.max(
+          0,
+          jumlahBayar -
+          kembalian
+        ),
+
+      referensi:
+        referensi,
+
+      status:
+        status,
+
+      catatan:
+        catatan,
+
+      dibayarOleh:
+        dibayarOleh,
+
+      createdAt:
+        createdAt
+
+    });
+
+  }
+
+
+  /* ========================================================
+     URUTKAN TERBARU
+     ======================================================== */
+
+  result.sort(
+    function(a, b) {
+
+      const dateA =
+        new Date(
+          a.tanggal || 0
+        ).getTime();
+
+
+      const dateB =
+        new Date(
+          b.tanggal || 0
+        ).getTime();
+
+
+      return dateB - dateA;
+
+    }
+  );
+
+
+  return {
+
+    success: true,
+
+    kunjunganId:
+      kunjunganId,
+
+    count:
+      result.length,
+
+    data:
+      result
+
+  };
+
+}
+ 
+ 
+function testPaymentHistoryDebug() {
+
+  const kunjunganId =
+    'KJ-20260923093502-1D8B';
+
+
+  const paymentSheet =
+    getSheetByConfig(
+      'PEMBAYARAN'
+    );
+
+
+  const transactionSheet =
+    getSheetByConfig(
+      'TRANSAKSI'
+    );
+
+
+  const paymentMap =
+    getHeaderMap_(
+      paymentSheet
+    );
+
+
+  const transactionMap =
+    getHeaderMap_(
+      transactionSheet
+    );
+
+
+  const paymentData =
+    paymentSheet
+      .getDataRange()
+      .getValues();
+
+
+  const transactionData =
+    transactionSheet
+      .getDataRange()
+      .getValues();
+
+
+  Logger.log(
+    '========================================'
+  );
+
+  Logger.log(
+    'KUNJUNGAN ID = ' +
+    kunjunganId
+  );
+
+  Logger.log(
+    '========================================'
+  );
+
+
+  Logger.log(
+    '--- TRANSAKSI TERKAIT KUNJUNGAN ---'
+  );
+
+
+  for (
+    let i = 1;
+    i < transactionData.length;
+    i++
+  ) {
+
+    const row =
+      transactionData[i];
+
+
+    const rowKunjunganId =
+      transactionMap.KUNJUNGAN_ID !== undefined
+        ? String(
+            row[
+              transactionMap.KUNJUNGAN_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    if (
+      rowKunjunganId ===
+      kunjunganId
+    ) {
+
+      Logger.log(
+        JSON.stringify({
+
+          row:
+            i + 1,
+
+          TRANSAKSI_ID:
+            transactionMap.TRANSAKSI_ID !== undefined
+              ? row[
+                  transactionMap.TRANSAKSI_ID
+                ]
+              : '',
+
+          KUNJUNGAN_ID:
+            rowKunjunganId,
+
+          JENIS_TRANSAKSI:
+            transactionMap.JENIS_TRANSAKSI !== undefined
+              ? row[
+                  transactionMap.JENIS_TRANSAKSI
+                ]
+              : '',
+
+          TOTAL:
+            transactionMap.TOTAL !== undefined
+              ? row[
+                  transactionMap.TOTAL
+                ]
+              : '',
+
+          STATUS:
+            transactionMap.STATUS !== undefined
+              ? row[
+                  transactionMap.STATUS
+                ]
+              : ''
+
+        })
+      );
+
+    }
+
+  }
+
+
+  Logger.log(
+    '--- SELURUH PEMBAYARAN ---'
+  );
+
+
+  for (
+    let i = 1;
+    i < paymentData.length;
+    i++
+  ) {
+
+    const row =
+      paymentData[i];
+
+
+    Logger.log(
+      JSON.stringify({
+
+        row:
+          i + 1,
+
+        PEMBAYARAN_ID:
+          paymentMap.PEMBAYARAN_ID !== undefined
+            ? row[
+                paymentMap.PEMBAYARAN_ID
+              ]
+            : '',
+
+        TRANSAKSI_ID:
+          paymentMap.TRANSAKSI_ID !== undefined
+            ? row[
+                paymentMap.TRANSAKSI_ID
+              ]
+            : '',
+
+        TANGGAL:
+          paymentMap.TANGGAL !== undefined
+            ? row[
+                paymentMap.TANGGAL
+              ]
+            : '',
+
+        METODE_BAYAR:
+          paymentMap.METODE_BAYAR !== undefined
+            ? row[
+                paymentMap.METODE_BAYAR
+              ]
+            : '',
+
+        JUMLAH_BAYAR:
+          paymentMap.JUMLAH_BAYAR !== undefined
+            ? row[
+                paymentMap.JUMLAH_BAYAR
+              ]
+            : '',
+
+        KEMBALIAN:
+          paymentMap.KEMBALIAN !== undefined
+            ? row[
+                paymentMap.KEMBALIAN
+              ]
+            : '',
+
+        STATUS:
+          paymentMap.STATUS !== undefined
+            ? row[
+                paymentMap.STATUS
+              ]
+            : ''
+
+      })
+    );
+
+  }
+
+
+  Logger.log(
+    '========================================'
+  );
+
+}
+ 
+
