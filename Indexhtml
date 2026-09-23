@@ -1227,6 +1227,13 @@
        Resep
       </div>
 
+      <div
+       class="menu-item"
+       onclick="showPage('farmasi', this)"
+      >
+       <span class="menu-icon">🏥</span>
+       Pelayanan Farmasi
+      </div>
 
       <div class="menu-section">
         Keuangan
@@ -7762,6 +7769,7 @@ function toggleMedicineStatus(
     (); return; }
     if (page === 'resep') { document.getElementById('topbarTitle').textContent='Resep'; loadPrescriptionPage
     ();return; }
+    if (page === 'farmasi') { document.getElementById('topbarTitle').textContent = 'Pelayanan Farmasi'; loadPharmacyPage();return; }
 
   placeholderPage(page);
   };
@@ -10649,6 +10657,1166 @@ function closePrescriptionModal() {
 
 
   prescriptionItems = [];
+
+}
+
+/* ============================================================
+ * V1 TAHAP 8D
+ * FARMASI — PELAYANAN FARMASI
+ *
+ * Tidak mengubah:
+ * Dashboard
+ * Data Pasien
+ * Pendaftaran
+ * Antrian
+ * Pemeriksaan
+ * Rekam Medis
+ * Data Obat
+ * Resep
+ * ============================================================ */
+
+let pharmacyRows = [];
+let currentPharmacyPrescriptionId = '';
+
+
+/* ============================================================
+ * HALAMAN PELAYANAN FARMASI
+ * ============================================================ */
+
+function loadPharmacyPage() {
+
+  document.getElementById(
+    'topbarTitle'
+  ).textContent =
+    'Pelayanan Farmasi';
+
+
+  document.getElementById(
+    'content'
+  ).innerHTML = `
+
+    <div class="page-header">
+
+      <div>
+
+        <h1 class="page-title">
+          🏥 Pelayanan Farmasi
+        </h1>
+
+        <div class="page-description">
+          Proses resep pasien dan keluarkan obat berdasarkan stok aktual.
+        </div>
+
+      </div>
+
+      <button
+        class="btn btn-secondary"
+        onclick="loadPharmacyPrescriptions()"
+      >
+        🔄 Refresh
+      </button>
+
+    </div>
+
+
+    <div class="card">
+
+      <div class="toolbar">
+
+        <div class="search-box">
+
+          <input
+            id="pharmacySearch"
+            class="form-control"
+            placeholder="🔍 Cari resep, pasien atau No. RM..."
+            oninput="loadPharmacyPrescriptions()"
+          >
+
+        </div>
+
+
+        <select
+          id="pharmacyStatus"
+          class="form-control"
+          style="max-width:190px;"
+          onchange="loadPharmacyPrescriptions()"
+        >
+
+          <option value="">
+            Menunggu & Diproses
+          </option>
+
+          <option value="MENUNGGU">
+            Menunggu
+          </option>
+
+          <option value="DIPROSES">
+            Diproses
+          </option>
+
+          <option value="SELESAI">
+            Selesai
+          </option>
+
+          <option value="BATAL">
+            Batal
+          </option>
+
+        </select>
+
+      </div>
+
+
+      <div id="pharmacyTable">
+
+        <div class="loading-state">
+          Memuat data farmasi...
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  loadPharmacyPrescriptions();
+
+}
+
+
+/* ============================================================
+ * LOAD DATA FARMASI
+ * ============================================================ */
+
+function loadPharmacyPrescriptions() {
+
+  const container =
+    document.getElementById(
+      'pharmacyTable'
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  const searchElement =
+    document.getElementById(
+      'pharmacySearch'
+    );
+
+  const statusElement =
+    document.getElementById(
+      'pharmacyStatus'
+    );
+
+
+  const search =
+    searchElement
+      ? searchElement.value
+      : '';
+
+
+  const status =
+    statusElement
+      ? statusElement.value
+      : '';
+
+
+  container.innerHTML = `
+
+    <div class="loading-state">
+      Memuat data farmasi...
+    </div>
+
+  `;
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        renderPharmacyTable(
+          result || {
+            total: 0,
+            data: []
+          }
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      handleServerError
+    )
+
+    .getPharmacyPrescriptions(
+      sessionToken,
+      search,
+      status
+    );
+
+}
+
+
+/* ============================================================
+ * RENDER TABEL FARMASI
+ * ============================================================ */
+
+function renderPharmacyTable(
+  result
+) {
+
+  const container =
+    document.getElementById(
+      'pharmacyTable'
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  const data =
+    result &&
+    Array.isArray(result.data)
+      ? result.data
+      : [];
+
+
+  pharmacyRows =
+    data;
+
+
+  if (data.length === 0) {
+
+    container.innerHTML = `
+
+      <div class="empty">
+
+        <div class="empty-icon">
+          🏥
+        </div>
+
+        <h3>
+          Tidak ada resep
+        </h3>
+
+        <p>
+          Belum ada resep yang perlu diproses di farmasi.
+        </p>
+
+      </div>
+
+    `;
+
+    return;
+  }
+
+
+  container.innerHTML = `
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>Tanggal</th>
+            <th>No. Resep</th>
+            <th>No. RM</th>
+            <th>Pasien</th>
+            <th>Obat</th>
+            <th>Pemeriksa</th>
+            <th>Status</th>
+            <th>Aksi</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${data.map(
+            function(resep) {
+
+              return `
+
+                <tr>
+
+                  <td>
+                    ${escapeHTML(
+                      resep.tanggal ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+
+                    <strong class="rm">
+                      ${escapeHTML(
+                        resep.resepId ||
+                        '-'
+                      )}
+                    </strong>
+
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      resep.noRM ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+
+                    <strong>
+                      ${escapeHTML(
+                        resep.namaPasien ||
+                        '-'
+                      )}
+                    </strong>
+
+                  </td>
+
+
+                  <td>
+
+                    <strong>
+                      ${
+                        Number(
+                          resep.jumlahJenisObat ||
+                          0
+                        )
+                      }
+                    </strong>
+                    jenis
+
+                    <div
+                      class="muted"
+                      style="font-size:11px;"
+                    >
+                      ${
+                        Number(
+                          resep.totalItem ||
+                          0
+                        )
+                      }
+                      item
+                    </div>
+
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      resep.dokterBidan ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+
+                    ${pharmacyStatusBadge(
+                      resep.status
+                    )}
+
+                  </td>
+
+
+                  <td>
+
+                    <div class="action-group">
+
+                      <button
+                        class="btn btn-secondary btn-small"
+                        onclick="viewPharmacyPrescription(
+                          '${escapeAttr(
+                            resep.resepId
+                          )}'
+                        )"
+                      >
+                        👁 Detail
+                      </button>
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `;
+
+            }
+          ).join('')}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+
+    <div
+      class="muted"
+      style="
+        margin-top:12px;
+        font-size:12px;
+      "
+    >
+
+      Menampilkan
+      <strong>
+        ${formatNumber(
+          data.length
+        )}
+      </strong>
+      resep.
+
+    </div>
+
+  `;
+
+}
+
+
+/* ============================================================
+ * STATUS BADGE FARMASI
+ * ============================================================ */
+
+function pharmacyStatusBadge(
+  status
+) {
+
+  const value =
+    String(
+      status || ''
+    )
+      .trim()
+      .toUpperCase();
+
+
+  if (
+    value === 'MENUNGGU'
+  ) {
+
+    return `
+
+      <span
+        class="badge badge-warning"
+      >
+        MENUNGGU
+      </span>
+
+    `;
+
+  }
+
+
+  if (
+    value === 'DIPROSES'
+  ) {
+
+    return `
+
+      <span
+        class="badge badge-info"
+      >
+        DIPROSES
+      </span>
+
+    `;
+
+  }
+
+
+  if (
+    value === 'SELESAI'
+  ) {
+
+    return `
+
+      <span
+        class="badge badge-active"
+      >
+        SELESAI
+      </span>
+
+    `;
+
+  }
+
+
+  if (
+    value === 'BATAL'
+  ) {
+
+    return `
+
+      <span
+        class="badge badge-inactive"
+      >
+        BATAL
+      </span>
+
+    `;
+
+  }
+
+
+  return `
+
+    <span class="badge">
+      ${escapeHTML(
+        value || '-'
+      )}
+    </span>
+
+  `;
+
+}
+
+
+/* ============================================================
+ * DETAIL RESEP FARMASI
+ * ============================================================ */
+
+function viewPharmacyPrescription(
+  resepId
+) {
+
+  currentPharmacyPrescriptionId =
+    resepId;
+
+
+  showLoading(
+    'Memuat detail resep dan stok obat...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        hideLoading();
+
+        renderPharmacyPrescriptionDetail(
+          result
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .getPharmacyPrescriptionDetail(
+      sessionToken,
+      resepId
+    );
+
+}
+
+
+/* ============================================================
+ * RENDER DETAIL FARMASI
+ * ============================================================ */
+
+function renderPharmacyPrescriptionDetail(
+  resep
+) {
+
+  const oldModal =
+    document.getElementById(
+      'pharmacyDetailModal'
+    );
+
+
+  if (oldModal) {
+    oldModal.remove();
+  }
+
+
+  const details =
+    resep &&
+    Array.isArray(
+      resep.detail
+    )
+      ? resep.detail
+      : [];
+
+
+  const semuaStokCukup =
+    resep &&
+    resep.semuaStokCukup === true;
+
+
+  document.body.insertAdjacentHTML(
+    'beforeend',
+    `
+
+      <div
+        id="pharmacyDetailModal"
+        class="modal show"
+      >
+
+        <div
+          class="modal-box"
+          style="
+            max-width:1000px;
+            max-height:92vh;
+            overflow:auto;
+          "
+        >
+
+          <div class="modal-header">
+
+            <div class="modal-title">
+              🏥 Detail Pelayanan Farmasi
+            </div>
+
+
+            <button
+              class="modal-close"
+              onclick="closePharmacyDetail()"
+            >
+              ×
+            </button>
+
+          </div>
+
+
+          <div class="modal-body">
+
+
+            <div
+              class="form-grid"
+              style="margin-bottom:20px;"
+            >
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  No. Resep
+                </label>
+
+                <input
+                  class="form-control"
+                  readonly
+                  value="${escapeAttr(
+                    resep.resepId ||
+                    ''
+                  )}"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Tanggal
+                </label>
+
+                <input
+                  class="form-control"
+                  readonly
+                  value="${escapeAttr(
+                    resep.tanggal ||
+                    ''
+                  )}"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  No. RM
+                </label>
+
+                <input
+                  class="form-control"
+                  readonly
+                  value="${escapeAttr(
+                    resep.noRM ||
+                    ''
+                  )}"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Pasien
+                </label>
+
+                <input
+                  class="form-control"
+                  readonly
+                  value="${escapeAttr(
+                    resep.namaPasien ||
+                    ''
+                  )}"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Pemeriksa
+                </label>
+
+                <input
+                  class="form-control"
+                  readonly
+                  value="${escapeAttr(
+                    resep.dokterBidan ||
+                    ''
+                  )}"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Status
+                </label>
+
+                <div style="padding-top:8px;">
+                  ${pharmacyStatusBadge(
+                    resep.status
+                  )}
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <div
+              style="
+                margin-bottom:15px;
+                padding:15px;
+                border-radius:14px;
+                background:${
+                  semuaStokCukup
+                    ? '#f0fdf4'
+                    : '#fef2f2'
+                };
+                border:1px solid ${
+                  semuaStokCukup
+                    ? '#bbf7d0'
+                    : '#fecaca'
+                };
+              "
+            >
+
+              <strong>
+                ${
+                  semuaStokCukup
+                    ? '✅ Semua stok obat mencukupi'
+                    : '⚠️ Ada obat yang stoknya tidak mencukupi'
+                }
+              </strong>
+
+              <div
+                class="muted"
+                style="
+                  margin-top:5px;
+                  font-size:12px;
+                "
+              >
+                Stok yang ditampilkan adalah stok aktual saat ini.
+              </div>
+
+            </div>
+
+
+            <div class="table-wrap">
+
+              <table>
+
+                <thead>
+
+                  <tr>
+
+                    <th>Obat</th>
+                    <th>Jumlah</th>
+                    <th>Dosis</th>
+                    <th>Aturan Pakai</th>
+                    <th>Stok</th>
+                    <th>Keterangan</th>
+
+                  </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                  ${
+                    details.length
+                      ? details.map(
+                          function(item) {
+
+                            const cukup =
+                              item.stokCukup === true;
+
+
+                            return `
+
+                              <tr>
+
+                                <td>
+
+                                  <strong>
+                                    ${escapeHTML(
+                                      item.namaObat ||
+                                      '-'
+                                    )}
+                                  </strong>
+
+                                  <div
+                                    class="muted"
+                                    style="font-size:11px;"
+                                  >
+                                    ${escapeHTML(
+                                      item.kodeObat ||
+                                      ''
+                                    )}
+                                  </div>
+
+                                </td>
+
+
+                                <td>
+
+                                  <strong>
+                                    ${formatNumber(
+                                      item.jumlah ||
+                                      0
+                                    )}
+                                  </strong>
+
+                                  ${escapeHTML(
+                                    item.satuan ||
+                                    ''
+                                  )}
+
+                                </td>
+
+
+                                <td>
+                                  ${escapeHTML(
+                                    item.dosis ||
+                                    '-'
+                                  )}
+                                </td>
+
+
+                                <td>
+                                  ${escapeHTML(
+                                    item.aturanPakai ||
+                                    '-'
+                                  )}
+                                </td>
+
+
+                                <td>
+
+                                  <strong>
+                                    ${formatNumber(
+                                      item.stok ||
+                                      0
+                                    )}
+                                  </strong>
+
+                                </td>
+
+
+                                <td>
+
+                                  ${
+                                    cukup
+
+                                      ? `
+                                        <span
+                                          class="badge badge-active"
+                                        >
+                                          ✓ Cukup
+                                        </span>
+                                      `
+
+                                      : `
+                                        <span
+                                          class="badge badge-inactive"
+                                        >
+                                          ✕ Tidak cukup
+                                        </span>
+                                      `
+                                  }
+
+                                </td>
+
+                              </tr>
+
+                            `;
+
+                          }
+                        ).join('')
+
+                      : `
+
+                        <tr>
+
+                          <td
+                            colspan="6"
+                            style="text-align:center;"
+                          >
+                            Tidak ada detail obat.
+                          </td>
+
+                        </tr>
+
+                      `
+                  }
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+
+            ${
+              resep.catatan
+                ? `
+
+                  <div
+                    class="detail-item"
+                    style="margin-top:18px;"
+                  >
+
+                    <div class="detail-label">
+                      Catatan
+                    </div>
+
+                    <div class="detail-value">
+                      ${escapeHTML(
+                        resep.catatan
+                      )}
+                    </div>
+
+                  </div>
+
+                `
+                : ''
+            }
+
+
+          </div>
+
+
+          <div class="modal-footer">
+
+
+            ${
+              (
+                (
+                  String(
+                    resep.status ||
+                    ''
+                  ).toUpperCase() ===
+                  'MENUNGGU'
+                ) ||
+                (
+                  String(
+                    resep.status ||
+                    ''
+                  ).toUpperCase() ===
+                  'DIPROSES'
+                )
+              )
+
+              && semuaStokCukup
+
+                ? `
+
+                  <button
+                    class="btn btn-success"
+                    onclick="processPharmacyPrescription(
+                      '${escapeAttr(
+                        resep.resepId
+                      )}'
+                    )"
+                  >
+                    💊 Proses & Keluarkan Obat
+                  </button>
+
+                `
+
+                : ''
+            }
+
+
+            <button
+              class="btn btn-secondary"
+              onclick="closePharmacyDetail()"
+            >
+              Tutup
+            </button>
+
+          </div>
+
+
+        </div>
+
+      </div>
+
+    `
+  );
+
+}
+
+
+/* ============================================================
+ * PROSES RESEP
+ * ============================================================ */
+
+function processPharmacyPrescription(
+  resepId
+) {
+
+  if (!resepId) {
+
+    showToast(
+      'ID resep tidak ditemukan.'
+    );
+
+    return;
+
+  }
+
+
+  const yakin =
+    confirm(
+      'Proses resep ini sekarang?\n\n' +
+      'Stok obat akan dikurangi sesuai jumlah resep dan status resep menjadi SELESAI.'
+    );
+
+
+  if (!yakin) {
+    return;
+  }
+
+
+  showLoading(
+    'Memproses resep dan mengeluarkan obat...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        hideLoading();
+
+
+        if (result &&
+            result.success === false) {
+
+          showToast(
+            result.message ||
+            'Resep gagal diproses.'
+          );
+
+          return;
+
+        }
+
+
+        closePharmacyDetail();
+
+
+        showToast(
+          result &&
+          result.message
+            ? result.message
+            : 'Resep berhasil diproses.'
+        );
+
+
+        loadPharmacyPrescriptions();
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .processPrescription(
+      sessionToken,
+      resepId
+    );
+
+}
+
+
+/* ============================================================
+ * TUTUP DETAIL FARMASI
+ * ============================================================ */
+
+function closePharmacyDetail() {
+
+  const modal =
+    document.getElementById(
+      'pharmacyDetailModal'
+    );
+
+
+  if (modal) {
+    modal.remove();
+  }
 
 }
 
