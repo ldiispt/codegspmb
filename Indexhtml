@@ -2808,89 +2808,109 @@ function loadPatientPage() {
 
     </div>
 
+  <div class="stats-grid">
 
-    <div class="stats-grid">
+  <div class="stat-card">
 
-      <div class="stat-card">
-
-        <div class="stat-icon">
-          👥
-        </div>
-
-        <div class="stat-label">
-          Total Pasien
-        </div>
-
-        <div
-          id="patientStatTotal"
-          class="stat-value"
-        >
-          -
-        </div>
-
-      </div>
-
-
-      <div class="stat-card">
-
-        <div class="stat-icon">
-          🟢
-        </div>
-
-        <div class="stat-label">
-          Pasien Aktif
-        </div>
-
-        <div
-          id="patientStatActive"
-          class="stat-value"
-        >
-          -
-        </div>
-
-      </div>
-
-
-      <div class="stat-card">
-
-        <div class="stat-icon">
-          👩
-        </div>
-
-        <div class="stat-label">
-          Perempuan
-        </div>
-
-        <div
-          id="patientStatFemale"
-          class="stat-value"
-        >
-          -
-        </div>
-
-      </div>
-
-
-      <div class="stat-card">
-
-        <div class="stat-icon">
-          🆕
-        </div>
-
-        <div class="stat-label">
-          Baru Bulan Ini
-        </div>
-
-        <div
-          id="patientStatNew"
-          class="stat-value"
-        >
-          -
-        </div>
-
-      </div>
-
+    <div class="stat-icon">
+      👥
     </div>
+
+    <div class="stat-label">
+      Total Pasien
+    </div>
+
+    <div
+      id="patientStatTotal"
+      class="stat-value"
+    >
+      -
+    </div>
+
+  </div>
+
+
+  <div class="stat-card">
+
+    <div class="stat-icon">
+      🟢
+    </div>
+
+    <div class="stat-label">
+      Pasien Aktif
+    </div>
+
+    <div
+      id="patientStatActive"
+      class="stat-value"
+    >
+      -
+    </div>
+
+  </div>
+
+
+  <div class="stat-card">
+
+    <div class="stat-icon">
+      👨
+    </div>
+
+    <div class="stat-label">
+      Laki-laki
+    </div>
+
+    <div
+      id="patientStatMale"
+      class="stat-value"
+    >
+      -
+    </div>
+
+  </div>
+
+
+  <div class="stat-card">
+
+    <div class="stat-icon">
+      👩
+    </div>
+
+    <div class="stat-label">
+      Perempuan
+    </div>
+
+    <div
+      id="patientStatFemale"
+      class="stat-value"
+    >
+      -
+    </div>
+
+  </div>
+
+
+  <div class="stat-card">
+
+    <div class="stat-icon">
+      🆕
+    </div>
+
+    <div class="stat-label">
+      Baru Bulan Ini
+    </div>
+
+    <div
+      id="patientStatNew"
+      class="stat-value"
+    >
+      -
+    </div>
+
+  </div>
+
+</div>    
+
 
 
     <div class="card">
@@ -2969,34 +2989,57 @@ function loadPatientStatistics() {
       document.getElementById(
         'patientStatTotal'
       ).textContent =
-        formatNumber(data.total);
+        formatNumber(
+          data.total || 0
+        );
+
 
       document.getElementById(
         'patientStatActive'
       ).textContent =
-        formatNumber(data.aktif);
+        formatNumber(
+          data.aktif || 0
+        );
+
+
+      document.getElementById(
+        'patientStatMale'
+      ).textContent =
+        formatNumber(
+          data.lakiLaki || 0
+        );
+
 
       document.getElementById(
         'patientStatFemale'
       ).textContent =
-        formatNumber(data.perempuan);
+        formatNumber(
+          data.perempuan || 0
+        );
+
 
       document.getElementById(
         'patientStatNew'
       ).textContent =
-        formatNumber(data.baruBulanIni);
+        formatNumber(
+          data.baruBulanIni || 0
+        );
 
     })
 
     .withFailureHandler(function(error) {
 
-      console.error(error);
+      console.error(
+        'Gagal memuat statistik pasien:',
+        error
+      );
 
     })
 
     .getPatientStatistics(
       sessionToken
     );
+
 }
 
 
