@@ -1793,6 +1793,36 @@
 
 }
 
+/* =====================================================
+   TAHAP 9D-3
+   TOMBOL CETAK DETAIL TRANSAKSI
+   ===================================================== */
+
+.financial-transaction-print-button {
+  border: 0;
+  background: #0f766e;
+  color: #ffffff;
+  padding: 8px 13px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.financial-transaction-print-button:hover {
+  background: #115e59;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 600px) {
+
+  .financial-transaction-print-button {
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+
+}
 
   </style>
 
@@ -17769,35 +17799,53 @@ function openFinancialTransactionDetail(
       >
 
         <div
-          class="financial-transaction-modal-header"
-        >
+  class="financial-transaction-modal-header"
+>
+  <div>
 
-          <div>
+    <h2>
+      🧾 Detail Transaksi
+    </h2>
 
-            <h2>
-              🧾 Detail Transaksi
-            </h2>
+    <div
+      class="financial-transaction-modal-id"
+    >
+      ${escapeFinancialHtml(
+        transaksiId
+      )}
+    </div>
 
-            <div
-              class="financial-transaction-modal-id"
-            >
-              ${escapeFinancialHtml(
-                transaksiId
-              )}
-            </div>
+  </div>
 
-          </div>
+  <div
+    style="
+      display:flex;
+      align-items:center;
+      gap:8px;
+    "
+  >
 
+    <button
+      type="button"
+      id="btnPrintFinancialTransaction"
+      class="financial-transaction-print-button"
+      title="Cetak Detail Transaksi"
+    >
+      🖨️ Cetak
+    </button>
 
-          <button
-            type="button"
-            id="btnCloseFinancialTransactionDetail"
-            class="financial-transaction-modal-close"
-          >
-            ✕
-          </button>
+    <button
+      type="button"
+      id="btnCloseFinancialTransactionDetail"
+      class="financial-transaction-modal-close"
+      aria-label="Tutup"
+    >
+      ✕
+    </button>
 
-        </div>
+  </div>
+
+</div>
 
 
         <div
@@ -17844,6 +17892,23 @@ function openFinancialTransactionDetail(
 
   }
 
+  const printButton =
+  document.getElementById(
+    'btnPrintFinancialTransaction'
+  );
+
+if (printButton) {
+
+  printButton.addEventListener(
+    'click',
+    function() {
+
+      printFinancialTransactionDetail();
+
+    }
+  );
+
+}
 
   const overlay =
     modal.querySelector(
@@ -17909,7 +17974,8 @@ function openFinancialTransactionDetail(
 
 
 /* =====================================================
-   RENDER DETAIL TRANSAKSI
+   RENDER DETAIL TRANSAKSI + RIWAYAT PEMBAYARAN
+   TAHAP 9D-2
    ===================================================== */
 
 function renderFinancialTransactionDetail(result) {
@@ -17919,26 +17985,6 @@ function renderFinancialTransactionDetail(result) {
     result
   );
 
-  /*
-   * getTransaction() dari Code.gs
-   * mengembalikan objek transaksi langsung.
-   *
-   * Contoh:
-   * {
-   *   transaksiId: 'TRX-BA520653',
-   *   kunjunganId: '...',
-   *   noRM: 'PMB-000004',
-   *   namaPasien: '...',
-   *   tanggal: '2026-09-23',
-   *   jenisTransaksi: 'PENDAPATAN',
-   *   total: 130000,
-   *   diskon: 0,
-   *   grandTotal: 130000,
-   *   status: 'AKTIF',
-   *   keterangan: '...',
-   *   detail: [...]
-   * }
-   */
 
   const transaction =
     result &&
@@ -18039,6 +18085,10 @@ function renderFinancialTransactionDetail(result) {
   }
 
 
+  /* =====================================================
+     DETAIL ITEM TRANSAKSI
+     ===================================================== */
+
   let detailHtml = '';
 
 
@@ -18100,6 +18150,7 @@ function renderFinancialTransactionDetail(result) {
                           <strong>
                             ${safe(item.namaItem)}
                           </strong>
+
                           ${
                             item.kodeItem
                               ? `
@@ -18115,6 +18166,7 @@ function renderFinancialTransactionDetail(result) {
                               `
                               : ''
                           }
+
                         </td>
 
                         <td>
@@ -18158,40 +18210,13 @@ function renderFinancialTransactionDetail(result) {
   }
 
 
+  /* =====================================================
+     HTML UTAMA DETAIL TRANSAKSI
+     ===================================================== */
+
   content.innerHTML = `
 
-    <div class="financial-transaction-modal-header">
 
-      <div>
-
-        <div
-          style="
-            font-size:18px;
-            font-weight:800;
-            color:#0f172a;
-          "
-        >
-          💰 Detail Transaksi
-        </div>
-
-        <div
-          class="financial-transaction-modal-id"
-        >
-          ${safe(transaction.transaksiId)}
-        </div>
-
-      </div>
-
-      <button
-        type="button"
-        id="btnCloseFinancialTransactionDetail"
-        class="financial-transaction-modal-close"
-        aria-label="Tutup"
-      >
-        ✕
-      </button>
-
-    </div>
 
 
     <div
@@ -18202,6 +18227,7 @@ function renderFinancialTransactionDetail(result) {
         <span>
           ID Transaksi
         </span>
+
         <strong>
           ${safe(transaction.transaksiId)}
         </strong>
@@ -18212,6 +18238,7 @@ function renderFinancialTransactionDetail(result) {
         <span>
           Tanggal
         </span>
+
         <strong>
           ${safe(transaction.tanggal)}
         </strong>
@@ -18222,6 +18249,7 @@ function renderFinancialTransactionDetail(result) {
         <span>
           Jenis Transaksi
         </span>
+
         <strong>
           ${safe(transaction.jenisTransaksi)}
         </strong>
@@ -18232,6 +18260,7 @@ function renderFinancialTransactionDetail(result) {
         <span>
           No. RM
         </span>
+
         <strong>
           ${safe(transaction.noRM)}
         </strong>
@@ -18242,6 +18271,7 @@ function renderFinancialTransactionDetail(result) {
         <span>
           Kunjungan
         </span>
+
         <strong>
           ${safe(transaction.kunjunganId)}
         </strong>
@@ -18252,6 +18282,7 @@ function renderFinancialTransactionDetail(result) {
         <span>
           Status
         </span>
+
         <strong>
           ${safe(transaction.status)}
         </strong>
@@ -18362,8 +18393,38 @@ function renderFinancialTransactionDetail(result) {
 
     </div>
 
+
+    <!-- =================================================
+         RIWAYAT PEMBAYARAN
+         ================================================= -->
+
+    <div
+      id="financialPaymentHistoryContainer"
+      style="
+        margin-top:22px;
+      "
+    >
+
+      <div
+        style="
+          padding:18px;
+          text-align:center;
+          background:#f8fafc;
+          border-radius:12px;
+          color:#64748b;
+        "
+      >
+        💳 Memuat riwayat pembayaran...
+      </div>
+
+    </div>
+
   `;
 
+
+  /* =====================================================
+     TAMPILKAN MODAL
+     ===================================================== */
 
   modal.style.display = 'flex';
 
@@ -18394,6 +18455,646 @@ function renderFinancialTransactionDetail(result) {
       }
 
     };
+
+
+  /* =====================================================
+     AMBIL RIWAYAT PEMBAYARAN
+     ===================================================== */
+
+  const paymentContainer =
+    document.getElementById(
+      'financialPaymentHistoryContainer'
+    );
+
+
+  const token =
+    sessionToken;
+
+
+  const kunjunganId =
+    String(
+      transaction.kunjunganId || ''
+    ).trim();
+
+
+  if (
+    !paymentContainer ||
+    !kunjunganId
+  ) {
+
+    if (paymentContainer) {
+
+      paymentContainer.innerHTML = `
+        <div
+          style="
+            padding:18px;
+            text-align:center;
+            background:#f8fafc;
+            border-radius:12px;
+            color:#64748b;
+          "
+        >
+          Tidak ada Kunjungan ID untuk mengambil
+          riwayat pembayaran.
+        </div>
+      `;
+
+    }
+
+    return;
+
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(paymentResult) {
+
+        console.log(
+          'HASIL getPaymentHistory:',
+          paymentResult
+        );
+
+
+        renderFinancialPaymentHistory(
+          paymentResult,
+          transaction
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        console.error(
+          'Gagal mengambil riwayat pembayaran:',
+          error
+        );
+
+
+        if (!paymentContainer) {
+          return;
+        }
+
+
+        const message =
+          error &&
+          error.message
+            ? error.message
+            : 'Riwayat pembayaran gagal dimuat.';
+
+
+        paymentContainer.innerHTML = `
+
+          <div
+            style="
+              padding:18px;
+              background:#fff7ed;
+              border:1px solid #fed7aa;
+              border-radius:12px;
+              color:#9a3412;
+            "
+          >
+
+            <strong>
+              💳 Riwayat Pembayaran
+            </strong>
+
+            <div
+              style="
+                margin-top:6px;
+                font-size:13px;
+              "
+            >
+              ${safe(message)}
+            </div>
+
+          </div>
+
+        `;
+
+      }
+    )
+
+    .getPaymentHistory(
+      token,
+      kunjunganId
+    );
+
+}
+
+/* =====================================================
+   RENDER RIWAYAT PEMBAYARAN
+   TAHAP 9D-2
+   ===================================================== */
+
+function renderFinancialPaymentHistory(
+  result,
+  transaction
+) {
+
+  const container =
+    document.getElementById(
+      'financialPaymentHistoryContainer'
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  function formatRupiah(value) {
+
+    const number =
+      Number(value || 0);
+
+    return (
+      'Rp ' +
+      number.toLocaleString(
+        'id-ID'
+      )
+    );
+
+  }
+
+
+  function safe(value) {
+
+    return escapeFinancialHtml(
+      String(
+        value === undefined ||
+        value === null ||
+        value === ''
+          ? '-'
+          : value
+      )
+    );
+
+  }
+
+
+  let payments = [];
+
+
+  if (
+    result &&
+    Array.isArray(result.data)
+  ) {
+
+    payments =
+      result.data;
+
+  } else if (
+    Array.isArray(result)
+  ) {
+
+    payments =
+      result;
+
+  }
+
+
+  /* =====================================================
+     TIDAK ADA PEMBAYARAN
+     ===================================================== */
+
+  if (!payments.length) {
+
+    container.innerHTML = `
+
+      <div
+        style="
+          padding:18px;
+          background:#f8fafc;
+          border:1px solid #e2e8f0;
+          border-radius:12px;
+        "
+      >
+
+        <div
+          style="
+            font-weight:800;
+            color:#0f172a;
+            margin-bottom:6px;
+          "
+        >
+          💳 Riwayat Pembayaran
+        </div>
+
+        <div
+          style="
+            font-size:13px;
+            color:#64748b;
+          "
+        >
+          Belum ada pembayaran untuk kunjungan ini.
+        </div>
+
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  /* =====================================================
+     HITUNG TOTAL
+     ===================================================== */
+
+  let totalEfektif = 0;
+  let totalBayar = 0;
+  let totalKembalian = 0;
+
+
+  payments.forEach(
+    function(payment) {
+
+      totalBayar +=
+        Number(
+          payment.jumlahBayar || 0
+        );
+
+
+      totalKembalian +=
+        Number(
+          payment.kembalian || 0
+        );
+
+
+      totalEfektif +=
+        Number(
+          payment.jumlahEfektif !== undefined
+            ? payment.jumlahEfektif
+            : (
+                Number(
+                  payment.jumlahBayar || 0
+                ) -
+                Number(
+                  payment.kembalian || 0
+                )
+              )
+        );
+
+    }
+  );
+
+
+  const grandTotal =
+    Number(
+      transaction.grandTotal ||
+      transaction.total ||
+      0
+    );
+
+
+  const sisa =
+    Math.max(
+      0,
+      grandTotal -
+      totalEfektif
+    );
+
+
+  let statusBayar =
+    'BELUM BAYAR';
+
+
+  if (totalEfektif >= grandTotal) {
+
+    statusBayar =
+      'LUNAS';
+
+  } else if (totalEfektif > 0) {
+
+    statusBayar =
+      'SEBAGIAN';
+
+  }
+
+
+  /* =====================================================
+     TABEL PEMBAYARAN
+     ===================================================== */
+
+  const rows =
+    payments
+      .map(
+        function(payment, index) {
+
+          const efektif =
+            Number(
+              payment.jumlahEfektif !== undefined
+                ? payment.jumlahEfektif
+                : (
+                    Number(
+                      payment.jumlahBayar || 0
+                    ) -
+                    Number(
+                      payment.kembalian || 0
+                    )
+                  )
+            );
+
+
+          return `
+
+            <tr>
+
+              <td>
+                ${index + 1}
+              </td>
+
+              <td>
+                ${safe(payment.tanggal)}
+              </td>
+
+              <td>
+                <strong>
+                  ${safe(payment.metodeBayar)}
+                </strong>
+              </td>
+
+              <td>
+                ${formatRupiah(
+                  payment.jumlahBayar
+                )}
+              </td>
+
+              <td>
+                ${formatRupiah(
+                  payment.kembalian
+                )}
+              </td>
+
+              <td>
+                <strong>
+                  ${formatRupiah(
+                    efektif
+                  )}
+                </strong>
+              </td>
+
+              <td>
+                ${safe(
+                  payment.referensi
+                )}
+              </td>
+
+              <td>
+                ${safe(
+                  payment.dibayarOleh
+                )}
+              </td>
+
+            </tr>
+
+          `;
+
+        }
+      )
+      .join('');
+
+
+  /* =====================================================
+     STATUS
+     ===================================================== */
+
+  let statusBackground =
+    '#fef3c7';
+
+  let statusColor =
+    '#92400e';
+
+
+  if (statusBayar === 'LUNAS') {
+
+    statusBackground =
+      '#dcfce7';
+
+    statusColor =
+      '#166534';
+
+  } else if (
+    statusBayar === 'SEBAGIAN'
+  ) {
+
+    statusBackground =
+      '#fef3c7';
+
+    statusColor =
+      '#92400e';
+
+  } else {
+
+    statusBackground =
+      '#fee2e2';
+
+    statusColor =
+      '#991b1b';
+
+  }
+
+
+  /* =====================================================
+     TAMPILKAN
+     ===================================================== */
+
+  container.innerHTML = `
+
+    <div
+      class="financial-transaction-items"
+    >
+
+      <h3>
+        💳 Riwayat Pembayaran
+      </h3>
+
+
+      <div
+        class="financial-transaction-items-scroll"
+      >
+
+        <table>
+
+          <thead>
+
+            <tr>
+
+              <th>No</th>
+
+              <th>Tanggal</th>
+
+              <th>Metode</th>
+
+              <th>Jumlah Bayar</th>
+
+              <th>Kembalian</th>
+
+              <th>Jumlah Efektif</th>
+
+              <th>Referensi</th>
+
+              <th>Dibayar Oleh</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${rows}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+
+      <!-- RINGKASAN PEMBAYARAN -->
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:
+            repeat(3, minmax(0, 1fr));
+          gap:12px;
+          margin-top:14px;
+        "
+      >
+
+        <div
+          style="
+            padding:14px;
+            background:#f8fafc;
+            border-radius:10px;
+          "
+        >
+
+          <div
+            style="
+              font-size:11px;
+              color:#64748b;
+            "
+          >
+            Total Dibayar
+          </div>
+
+          <strong
+            style="
+              display:block;
+              margin-top:4px;
+              font-size:16px;
+              color:#0f172a;
+            "
+          >
+            ${formatRupiah(
+              totalEfektif
+            )}
+          </strong>
+
+        </div>
+
+
+        <div
+          style="
+            padding:14px;
+            background:#fff7ed;
+            border-radius:10px;
+          "
+        >
+
+          <div
+            style="
+              font-size:11px;
+              color:#64748b;
+            "
+          >
+            Sisa Tagihan
+          </div>
+
+          <strong
+            style="
+              display:block;
+              margin-top:4px;
+              font-size:16px;
+              color:#c2410c;
+            "
+          >
+            ${formatRupiah(
+              sisa
+            )}
+          </strong>
+
+        </div>
+
+
+        <div
+          style="
+            padding:14px;
+            background:${statusBackground};
+            border-radius:10px;
+          "
+        >
+
+          <div
+            style="
+              font-size:11px;
+              color:#64748b;
+            "
+          >
+            Status Pembayaran
+          </div>
+
+          <strong
+            style="
+              display:block;
+              margin-top:4px;
+              font-size:16px;
+              color:${statusColor};
+            "
+          >
+            ${statusBayar}
+          </strong>
+
+        </div>
+
+      </div>
+
+
+      ${
+        totalKembalian > 0
+          ? `
+            <div
+              style="
+                margin-top:10px;
+                padding:10px 14px;
+                background:#eff6ff;
+                border-radius:10px;
+                font-size:12px;
+                color:#1e40af;
+              "
+            >
+              Total kembalian:
+              <strong>
+                ${formatRupiah(
+                  totalKembalian
+                )}
+              </strong>
+            </div>
+          `
+          : ''
+      }
+
+    </div>
+
+  `;
 
 }
 
@@ -18456,6 +19157,583 @@ function closeFinancialTransactionDetail() {
 
 }
 
+/* =====================================================
+   TAHAP 9D-3
+   CETAK DETAIL TRANSAKSI & PEMBAYARAN
+   ===================================================== */
+
+function printFinancialTransactionDetail() {
+
+  const modal =
+    document.getElementById(
+      'financialTransactionDetailModal'
+    );
+
+  const content =
+    document.getElementById(
+      'financialTransactionDetailContent'
+    );
+
+  if (!modal || !content) {
+
+    alert(
+      'Detail transaksi belum tersedia.'
+    );
+
+    return;
+
+  }
+
+
+  const transaksiIdElement =
+    modal.querySelector(
+      '.financial-transaction-modal-id'
+    );
+
+  const transaksiId =
+    transaksiIdElement
+      ? transaksiIdElement.textContent.trim()
+      : '-';
+
+
+  const contentHtml =
+    content.innerHTML;
+
+
+  const printWindow =
+    window.open(
+      '',
+      '_blank',
+      'width=1000,height=800'
+    );
+
+
+  if (!printWindow) {
+
+    alert(
+      'Jendela cetak diblokir browser. Silakan izinkan pop-up untuk aplikasi ini.'
+    );
+
+    return;
+
+  }
+
+
+  printWindow.document.open();
+
+
+  printWindow.document.write(`
+<!DOCTYPE html>
+
+<html lang="id">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <title>
+    Bukti Transaksi ${escapeFinancialHtml(
+      transaksiId
+    )}
+  </title>
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+
+      margin: 0;
+
+      padding: 25px;
+
+      background: #ffffff;
+
+      color: #111827;
+
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+
+      font-size: 12px;
+
+      line-height: 1.5;
+
+    }
+
+
+    .print-wrapper {
+
+      width: 100%;
+
+      max-width: 900px;
+
+      margin: 0 auto;
+
+    }
+
+
+    .print-header {
+
+      text-align: center;
+
+      border-bottom: 2px solid #111827;
+
+      padding-bottom: 15px;
+
+      margin-bottom: 18px;
+
+    }
+
+
+    .print-header h1 {
+
+      margin: 0;
+
+      font-size: 20px;
+
+      font-weight: 800;
+
+      text-transform: uppercase;
+
+    }
+
+
+    .print-header h2 {
+
+      margin: 4px 0 0;
+
+      font-size: 14px;
+
+      font-weight: 700;
+
+    }
+
+
+    .print-header p {
+
+      margin: 4px 0 0;
+
+      color: #475569;
+
+      font-size: 11px;
+
+    }
+
+
+    .print-transaction-id {
+
+      margin-top: 10px;
+
+      font-size: 14px;
+
+      font-weight: 800;
+
+      letter-spacing: 0.5px;
+
+    }
+
+
+    .financial-transaction-info-grid {
+
+      display: grid;
+
+      grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+
+      gap: 10px;
+
+      margin-bottom: 18px;
+
+    }
+
+
+    .financial-transaction-info-grid > div {
+
+      padding: 10px;
+
+      border: 1px solid #dbe3ea;
+
+      border-radius: 7px;
+
+      background: #f8fafc;
+
+    }
+
+
+    .financial-transaction-info-grid span {
+
+      display: block;
+
+      color: #64748b;
+
+      font-size: 9px;
+
+      text-transform: uppercase;
+
+      font-weight: 700;
+
+      margin-bottom: 3px;
+
+    }
+
+
+    .financial-transaction-info-grid strong {
+
+      display: block;
+
+      color: #111827;
+
+      font-size: 11px;
+
+      word-break: break-word;
+
+    }
+
+
+    .financial-transaction-note {
+
+      margin-bottom: 18px;
+
+      padding: 10px;
+
+      border: 1px solid #dbe3ea;
+
+      border-radius: 7px;
+
+      background: #f8fafc;
+
+    }
+
+
+    .financial-transaction-note strong {
+
+      display: block;
+
+      margin-bottom: 4px;
+
+    }
+
+
+    .financial-transaction-items {
+
+      margin-top: 18px;
+
+    }
+
+
+    .financial-transaction-items h3 {
+
+      margin: 0 0 8px;
+
+      font-size: 14px;
+
+    }
+
+
+    .financial-transaction-items-scroll {
+
+      overflow: visible;
+
+    }
+
+
+    table {
+
+      width: 100%;
+
+      border-collapse: collapse;
+
+    }
+
+
+    th {
+
+      background: #f1f5f9;
+
+      border: 1px solid #cbd5e1;
+
+      padding: 7px;
+
+      font-size: 9px;
+
+      text-align: left;
+
+      text-transform: uppercase;
+
+    }
+
+
+    td {
+
+      border: 1px solid #cbd5e1;
+
+      padding: 7px;
+
+      font-size: 10px;
+
+      vertical-align: top;
+
+    }
+
+
+    .financial-transaction-total {
+
+      margin-top: 15px;
+
+      padding: 12px;
+
+      border-top: 2px solid #111827;
+
+      border-bottom: 1px solid #cbd5e1;
+
+      display: flex;
+
+      justify-content: space-between;
+
+      align-items: center;
+
+      font-size: 14px;
+
+    }
+
+
+    .financial-transaction-total strong {
+
+      font-size: 17px;
+
+    }
+
+
+    .financial-payment-history {
+
+      margin-top: 25px;
+
+      padding-top: 15px;
+
+      border-top: 2px solid #111827;
+
+    }
+
+
+    .financial-payment-history h3 {
+
+      margin: 0 0 10px;
+
+      font-size: 14px;
+
+    }
+
+
+    .financial-payment-summary {
+
+      display: grid;
+
+      grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+
+      gap: 10px;
+
+      margin-top: 12px;
+
+    }
+
+
+    .financial-payment-summary > div {
+
+      padding: 10px;
+
+      border: 1px solid #dbe3ea;
+
+      border-radius: 7px;
+
+      background: #f8fafc;
+
+    }
+
+
+    .financial-payment-summary small {
+
+      display: block;
+
+      color: #64748b;
+
+      font-size: 9px;
+
+      margin-bottom: 3px;
+
+    }
+
+
+    .financial-payment-summary strong {
+
+      font-size: 13px;
+
+    }
+
+
+    .print-footer {
+
+      margin-top: 30px;
+
+      padding-top: 12px;
+
+      border-top: 1px solid #cbd5e1;
+
+      display: flex;
+
+      justify-content: space-between;
+
+      color: #64748b;
+
+      font-size: 9px;
+
+    }
+
+
+    .print-only {
+
+      display: block;
+
+    }
+
+
+    @media print {
+
+      @page {
+
+        size: A4 portrait;
+
+        margin: 12mm;
+
+      }
+
+
+      body {
+
+        padding: 0;
+
+      }
+
+
+      .print-wrapper {
+
+        max-width: none;
+
+      }
+
+    }
+
+
+    @media (max-width: 700px) {
+
+      .financial-transaction-info-grid {
+
+        grid-template-columns: 1fr 1fr;
+
+      }
+
+      .financial-payment-summary {
+
+        grid-template-columns: 1fr;
+
+      }
+
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+  <div class="print-wrapper">
+
+    <div class="print-header">
+
+      <h1>
+        PMB SETIAWATI
+      </h1>
+
+      <h2>
+        PRAKTIK MANDIRI BIDAN
+      </h2>
+
+      <p>
+        Bukti Detail Transaksi
+      </p>
+
+      <div class="print-transaction-id">
+        ${escapeFinancialHtml(
+          transaksiId
+        )}
+      </div>
+
+    </div>
+
+
+    ${contentHtml}
+
+
+    <div class="print-footer">
+
+      <div>
+        Dicetak dari Sistem Informasi PMB SETIAWATI
+      </div>
+
+      <div>
+        ${new Date().toLocaleString('id-ID')}
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <script>
+
+    window.onload = function() {
+
+      setTimeout(
+        function() {
+
+          window.print();
+
+        },
+        500
+      );
+
+    };
+
+
+    window.onafterprint = function() {
+
+      setTimeout(
+        function() {
+
+          window.close();
+
+        },
+        300
+      );
+
+    };
+
+  <\/script>
+
+</body>
+
+</html>
+  `);
+
+
+  printWindow.document.close();
+
+}
 
 /* =====================================================
    ERROR
