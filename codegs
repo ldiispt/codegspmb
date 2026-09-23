@@ -2,7 +2,7 @@
  * PMB SETIAWATI
  * SISTEM INFORMASI PRAKTIK MANDIRI BIDAN
  *
- * V1 TAHAP 8
+ * V1 TAHAP 8C
  *
  * BASELINE:
  * - Login
@@ -16,7 +16,6 @@
  * - Antrian
  * - Pemeriksaan
  * - Rekam Medis
- 
  *******************************************************/
 
 
@@ -9086,110 +9085,130 @@ function getMedicinesForPrescription(
  * memproses resep.
  * =====================================================
  */
-function savePrescription(
-  token,
-  data
-) {
 
-  const session =
-    requireSession_(token);
+/* =====================================================
+   SIMPAN RESEP
+   ===================================================== */
 
+function savePrescription(token, data) {
 
-  data =
-    data || {};
+  requireSession_(token);
 
+  data = data || {};
 
   const kunjunganId =
-    String(
-      data.kunjunganId || ''
-    ).trim();
-
-
-  const pasienId =
-    String(
-      data.pasienId || ''
-    ).trim();
-
-
-  const noRM =
-    String(
-      data.noRM || ''
-    ).trim();
-
+    String(data.kunjunganId || '').trim();
 
   const dokterBidan =
-    String(
-      data.dokterBidan || ''
-    ).trim();
-
+    String(data.dokterBidan || '').trim();
 
   const catatan =
-    String(
-      data.catatan || ''
-    ).trim();
-
+    String(data.catatan || '').trim();
 
   const details =
-    Array.isArray(
-      data.details
-    )
+    Array.isArray(data.details)
       ? data.details
       : [];
 
 
-  if (!kunjunganId) {
+  /* -----------------------------------------------------
+     VALIDASI DASAR
+     ----------------------------------------------------- */
 
+  if (!kunjunganId) {
     throw new Error(
       'Kunjungan belum dipilih.'
     );
-
   }
 
-
-  if (
-    !noRM &&
-    !pasienId
-  ) {
-
+  if (!details.length) {
     throw new Error(
-      'Pasien tidak ditemukan.'
+      'Minimal harus ada 1 obat dalam resep.'
     );
-
   }
 
 
-  if (
-    details.length === 0
-  ) {
-
-    throw new Error(
-      'Minimal satu obat harus dipilih.'
-    );
-
-  }
-
-
-  /*
-   * ---------------------------------------------------
-   * VALIDASI KUNJUNGAN
-   * ---------------------------------------------------
-   */
+  /* -----------------------------------------------------
+     AMBIL SHEET
+     ----------------------------------------------------- */
 
   const kunjunganSheet =
     getSheetByConfig('KUNJUNGAN');
 
-  const kunjunganValues =
-    kunjunganSheet
-      .getDataRange()
-      .getValues();
+  const resepSheet =
+    getSheetByConfig('RESEP');
+
+  const detailSheet =
+    getSheetByConfig('RESEP_DETAIL');
+
+  const obatSheet =
+    getSheetByConfig('OBAT');
+
+  const pasienSheet =
+    getSheetByConfig('PASIEN');
+
+
+  if (!kunjunganSheet) {
+    throw new Error(
+      'Sheet KUNJUNGAN tidak ditemukan.'
+    );
+  }
+
+  if (!resepSheet) {
+    throw new Error(
+      'Sheet RESEP tidak ditemukan.'
+    );
+  }
+
+  if (!detailSheet) {
+    throw new Error(
+      'Sheet RESEP_DETAIL tidak ditemukan.'
+    );
+  }
+
+  if (!obatSheet) {
+    throw new Error(
+      'Sheet OBAT tidak ditemukan.'
+    );
+  }
+
+
+  /* -----------------------------------------------------
+     HEADER MAP
+     ----------------------------------------------------- */
 
   const kunjunganMap =
     getHeaderMap_(kunjunganSheet);
 
+  const resepMap =
+    getHeaderMap_(resepSheet);
 
-  let kunjunganRow =
-    null;
+  const detailMap =
+    getHeaderMap_(detailSheet);
 
+  const obatMap =
+    getHeaderMap_(obatSheet);
+
+  const pasienMap =
+    pasienSheet
+      ? getHeaderMap_(pasienSheet)
+      : {};
+
+
+  /* -----------------------------------------------------
+     BACA KUNJUNGAN
+     ----------------------------------------------------- */
+
+  const kunjunganValues =
+    kunjunganSheet.getDataRange().getValues();
+
+  if (kunjunganValues.length < 2) {
+    throw new Error(
+      'Data kunjungan belum tersedia.'
+    );
+  }
+
+  let kunjungan = null;
 
   for (
     let i = 1;
@@ -9200,96 +9219,119 @@ function savePrescription(
     const row =
       kunjunganValues[i];
 
-
     const id =
       String(
-        row[
-          kunjunganMap.KUNJUNGAN_ID
-        ] || ''
+        row[kunjunganMap.KUNJUNGAN_ID] || ''
       ).trim();
 
+    if (id === kunjunganId) {
 
-    if (
-      id === kunjunganId
-    ) {
-
-      kunjunganRow =
-        row;
+      kunjungan = row;
 
       break;
-
     }
-
   }
 
 
-  if (!kunjunganRow) {
-
+  if (!kunjungan) {
     throw new Error(
       'Data kunjungan tidak ditemukan.'
     );
-
   }
 
 
-  const kunjunganNoRM =
-    String(
-      kunjunganRow[
-        kunjunganMap.NO_RM
-      ] || ''
-    ).trim();
+  /* -----------------------------------------------------
+     AMBIL IDENTITAS PASIEN DARI KUNJUNGAN
+     ----------------------------------------------------- */
+
+  const noRM =
+    kunjunganMap.NO_RM !== undefined
+      ? String(
+          kunjungan[kunjunganMap.NO_RM] || ''
+        ).trim()
+      : '';
+
+  const pasienId =
+    kunjunganMap.PASIEN_ID !== undefined
+      ? String(
+          kunjungan[kunjunganMap.PASIEN_ID] || ''
+        ).trim()
+      : '';
 
 
-  const kunjunganPasienId =
-    String(
-      kunjunganRow[
-        kunjunganMap.PASIEN_ID
-      ] || ''
-    ).trim();
-
-
-  /*
-   * Jangan percaya NO_RM/PASIEN_ID
-   * dari browser jika KUNJUNGAN sudah
-   * memiliki data yang benar.
-   */
-
-  const finalNoRM =
-    kunjunganNoRM ||
-    noRM;
-
-
-  const finalPasienId =
-    kunjunganPasienId ||
-    pasienId;
-
-
-  if (!finalNoRM) {
+  if (!noRM) {
 
     throw new Error(
-      'NO RM pada kunjungan tidak ditemukan.'
+      'NO_RM pada kunjungan tidak ditemukan.'
     );
 
   }
 
 
-  /*
-   * ---------------------------------------------------
-   * VALIDASI RESEP AKTIF PADA KUNJUNGAN
-   * ---------------------------------------------------
-   */
+  /* -----------------------------------------------------
+     CARI PASIEN
+     ----------------------------------------------------- */
 
-  const resepSheet =
-    getSheetByConfig('RESEP');
+  let namaPasien = '';
+
+  if (pasienSheet) {
+
+    const pasienValues =
+      pasienSheet
+        .getDataRange()
+        .getValues();
+
+    for (
+      let i = 1;
+      i < pasienValues.length;
+      i++
+    ) {
+
+      const row =
+        pasienValues[i];
+
+      const rowNoRM =
+        pasienMap.NO_RM !== undefined
+          ? String(
+              row[pasienMap.NO_RM] || ''
+            ).trim()
+          : '';
+
+      const rowPasienId =
+        pasienMap.PASIEN_ID !== undefined
+          ? String(
+              row[pasienMap.PASIEN_ID] || ''
+            ).trim()
+          : '';
+
+      if (
+        (pasienId && rowPasienId === pasienId) ||
+        (noRM && rowNoRM === noRM)
+      ) {
+
+        if (
+          pasienMap.NAMA !== undefined
+        ) {
+
+          namaPasien =
+            String(
+              row[pasienMap.NAMA] || ''
+            ).trim();
+
+        }
+
+        break;
+      }
+    }
+  }
+
+
+  /* -----------------------------------------------------
+     CEK RESEP AKTIF SEBELUMNYA
+     ----------------------------------------------------- */
 
   const resepValues =
-    resepSheet
-      .getDataRange()
-      .getValues();
-
-  const resepMap =
-    getHeaderMap_(resepSheet);
-
+    resepSheet.getDataRange().getValues();
 
   for (
     let i = 1;
@@ -9300,60 +9342,50 @@ function savePrescription(
     const row =
       resepValues[i];
 
+    const rowKunjunganId =
+      resepMap.KUNJUNGAN_ID !== undefined
+        ? String(
+            row[resepMap.KUNJUNGAN_ID] || ''
+          ).trim()
+        : '';
 
-    const existingKunjungan =
-      String(
-        row[
-          resepMap.KUNJUNGAN_ID
-        ] || ''
-      ).trim();
-
-
-    const existingStatus =
-      String(
-        row[
-          resepMap.STATUS
-        ] || ''
-      )
-        .trim()
-        .toUpperCase();
-
+    const status =
+      resepMap.STATUS !== undefined
+        ? String(
+            row[resepMap.STATUS] || ''
+          ).trim()
+        : '';
 
     if (
-      existingKunjungan ===
-        kunjunganId &&
-      existingStatus !==
-        'BATAL'
+      rowKunjunganId === kunjunganId &&
+      status !== 'BATAL'
     ) {
 
       throw new Error(
-        'Kunjungan ini sudah memiliki resep.'
+        'Kunjungan ini sudah memiliki resep aktif.'
       );
 
     }
+  }
+
+
+  /* -----------------------------------------------------
+     BACA OBAT
+     ----------------------------------------------------- */
+
+  const obatValues =
+    obatSheet.getDataRange().getValues();
+
+  if (obatValues.length < 2) {
+
+    throw new Error(
+      'Data obat belum tersedia.'
+    );
 
   }
 
 
-  /*
-   * ---------------------------------------------------
-   * VALIDASI OBAT
-   * ---------------------------------------------------
-   */
-
-  const obatSheet =
-    getSheetByConfig('OBAT');
-
-  const obatValues =
-    obatSheet
-      .getDataRange()
-      .getValues();
-
-  const obatMap =
-    getHeaderMap_(obatSheet);
-
-
-  const obatById = {};
+  const obatIndex = {};
 
 
   for (
@@ -9365,239 +9397,361 @@ function savePrescription(
     const row =
       obatValues[i];
 
+    const obatId =
+      obatMap.OBAT_ID !== undefined
+        ? String(
+            row[obatMap.OBAT_ID] || ''
+          ).trim()
+        : '';
 
-    const id =
-      String(
-        row[
-          obatMap.OBAT_ID
-        ] || ''
-      ).trim();
-
-
-    if (!id) {
-      continue;
+    if (obatId) {
+      obatIndex[obatId] = row;
     }
-
-
-    obatById[id] = {
-
-      obatId:
-        id,
-
-      kodeObat:
-        row[
-          obatMap.KODE_OBAT
-        ] || '',
-
-      namaObat:
-        row[
-          obatMap.NAMA_OBAT
-        ] || '',
-
-      satuan:
-        row[
-          obatMap.SATUAN
-        ] || '',
-
-      harga:
-        Number(
-          row[
-            obatMap.HARGA_JUAL
-          ] || 0
-        ),
-
-      stok:
-        Number(
-          row[
-            obatMap.STOK
-          ] || 0
-        ),
-
-      status:
-        String(
-          row[
-            obatMap.STATUS
-          ] || ''
-        )
-          .trim()
-          .toUpperCase(),
-
-      rowNumber:
-        i + 1
-
-    };
-
   }
 
 
-  /*
-   * Cegah obat yang sama dimasukkan
-   * dua kali dalam satu resep.
-   */
+  /* -----------------------------------------------------
+     VALIDASI DAN SIAPKAN DETAIL
+     ----------------------------------------------------- */
 
-  const usedMedicine = {};
+  const detailRows = [];
 
+  const obatTerpakai = {};
 
-  const validatedDetails = [];
-
-
-  details.forEach(
-    function(detail) {
-
-      const obatId =
-        String(
-          detail.obatId || ''
-        ).trim();
+  let totalItem = 0;
+  let total = 0;
 
 
-      const jumlah =
-        Number(
-          detail.jumlah || 0
-        );
+  details.forEach(function(item, index) {
+
+    item = item || {};
+
+    const obatId =
+      String(
+        item.obatId || ''
+      ).trim();
+
+    const jumlah =
+      Number(item.jumlah || 0);
+
+    const dosis =
+      String(
+        item.dosis || ''
+      ).trim();
+
+    const aturanPakai =
+      String(
+        item.aturanPakai || ''
+      ).trim();
+
+    const detailCatatan =
+      String(
+        item.catatan || ''
+      ).trim();
 
 
-      if (!obatId) {
+    if (!obatId) {
 
-        throw new Error(
-          'Ada obat yang belum dipilih.'
-        );
+      throw new Error(
+        'Obat pada baris ' +
+        (index + 1) +
+        ' belum dipilih.'
+      );
 
-      }
+    }
 
+
+    if (
+      !isFinite(jumlah) ||
+      jumlah <= 0
+    ) {
+
+      throw new Error(
+        'Jumlah obat pada baris ' +
+        (index + 1) +
+        ' tidak valid.'
+      );
+
+    }
+
+
+    if (obatTerpakai[obatId]) {
+
+      throw new Error(
+        'Obat yang sama tidak boleh dimasukkan dua kali dalam satu resep.'
+      );
+
+    }
+
+    obatTerpakai[obatId] = true;
+
+
+    const obat =
+      obatIndex[obatId];
+
+
+    if (!obat) {
+
+      throw new Error(
+        'Obat tidak ditemukan: ' +
+        obatId
+      );
+
+    }
+
+
+    const status =
+      obatMap.STATUS !== undefined
+        ? String(
+            obat[obatMap.STATUS] || ''
+          ).trim()
+        : 'AKTIF';
+
+
+    if (
+      status &&
+      status !== 'AKTIF'
+    ) {
+
+      throw new Error(
+        'Obat tidak aktif: ' +
+        (
+          obatMap.NAMA_OBAT !== undefined
+            ? obat[obatMap.NAMA_OBAT]
+            : obatId
+        )
+      );
+
+    }
+
+
+    const stok =
+      obatMap.STOK !== undefined
+        ? Number(
+            obat[obatMap.STOK] || 0
+          )
+        : 0;
+
+
+    if (jumlah > stok) {
+
+      throw new Error(
+        'Stok obat tidak mencukupi untuk ' +
+        (
+          obatMap.NAMA_OBAT !== undefined
+            ? obat[obatMap.NAMA_OBAT]
+            : obatId
+        ) +
+        '. Stok tersedia: ' +
+        stok +
+        ', diminta: ' +
+        jumlah
+      );
+
+    }
+
+
+    const kodeObat =
+      obatMap.KODE_OBAT !== undefined
+        ? String(
+            obat[obatMap.KODE_OBAT] || ''
+          ).trim()
+        : '';
+
+    const namaObat =
+      obatMap.NAMA_OBAT !== undefined
+        ? String(
+            obat[obatMap.NAMA_OBAT] || ''
+          ).trim()
+        : '';
+
+    const satuan =
+      obatMap.SATUAN !== undefined
+        ? String(
+            obat[obatMap.SATUAN] || ''
+          ).trim()
+        : '';
+
+    const harga =
+      obatMap.HARGA_JUAL !== undefined
+        ? Number(
+            obat[obatMap.HARGA_JUAL] || 0
+          )
+        : (
+            obatMap.HARGA !== undefined
+              ? Number(
+                  obat[obatMap.HARGA] || 0
+                )
+              : 0
+          );
+
+
+    const subtotal =
+      jumlah * harga;
+
+
+    const detailId =
+      'RSD-' +
+      Utilities.getUuid()
+        .replace(/-/g, '')
+        .substring(0, 8)
+        .toUpperCase();
+
+
+    /* ---------------------------------------------------
+       SIAPKAN BARIS BERDASARKAN HEADER SHEET
+       --------------------------------------------------- */
+
+    const row =
+      new Array(
+        detailSheet.getLastColumn()
+      ).fill('');
+
+
+    if (
+      detailMap.RESEP_DETAIL_ID !== undefined
+    ) {
+      row[
+        detailMap.RESEP_DETAIL_ID
+      ] = detailId;
+    }
+
+    if (
+      detailMap.RESEP_ID !== undefined
+    ) {
+      row[
+        detailMap.RESEP_ID
+      ] = '__RESEP_ID__';
+    }
+
+    if (
+      detailMap.OBAT_ID !== undefined
+    ) {
+      row[
+        detailMap.OBAT_ID
+      ] = obatId;
+    }
+
+    if (
+      detailMap.KODE_OBAT !== undefined
+    ) {
+      row[
+        detailMap.KODE_OBAT
+      ] = kodeObat;
+    }
+
+    if (
+      detailMap.NAMA_OBAT !== undefined
+    ) {
+      row[
+        detailMap.NAMA_OBAT
+      ] = namaObat;
+    }
+
+    if (
+      detailMap.JUMLAH !== undefined
+    ) {
+      row[
+        detailMap.JUMLAH
+      ] = jumlah;
+    }
+
+    if (
+      detailMap.SATUAN !== undefined
+    ) {
+      row[
+        detailMap.SATUAN
+      ] = satuan;
+    }
+
+    if (
+      detailMap.DOSIS !== undefined
+    ) {
+      row[
+        detailMap.DOSIS
+      ] = dosis;
+    }
+
+    if (
+      detailMap.ATURAN_PAKAI !== undefined
+    ) {
+      row[
+        detailMap.ATURAN_PAKAI
+      ] = aturanPakai;
+    }
+
+    if (
+      detailMap.CATATAN !== undefined
+    ) {
+      row[
+        detailMap.CATATAN
+      ] = detailCatatan;
+    }
+
+    if (
+      detailMap.HARGA !== undefined
+    ) {
+      row[
+        detailMap.HARGA
+      ] = harga;
+    }
+
+    if (
+      detailMap.SUBTOTAL !== undefined
+    ) {
+      row[
+        detailMap.SUBTOTAL
+      ] = subtotal;
+    }
+
+
+    detailRows.push(row);
+
+    totalItem += jumlah;
+    total += subtotal;
+
+  });
+
+
+  /* -----------------------------------------------------
+     VALIDASI HEADER RESEP_DETAIL
+     ----------------------------------------------------- */
+
+  const requiredDetailHeaders = [
+    'RESEP_DETAIL_ID',
+    'RESEP_ID',
+    'OBAT_ID',
+    'JUMLAH'
+  ];
+
+
+  requiredDetailHeaders.forEach(
+    function(header) {
 
       if (
-        isNaN(jumlah) ||
-        jumlah <= 0
+        detailMap[header] === undefined
       ) {
 
         throw new Error(
-          'Jumlah obat harus lebih dari 0.'
+          'Kolom ' +
+          header +
+          ' tidak ditemukan pada sheet RESEP_DETAIL.'
         );
 
       }
-
-
-      if (
-        usedMedicine[obatId]
-      ) {
-
-        throw new Error(
-          'Obat yang sama tidak boleh dimasukkan dua kali.'
-        );
-
-      }
-
-
-      usedMedicine[obatId] =
-        true;
-
-
-      const obat =
-        obatById[obatId];
-
-
-      if (!obat) {
-
-        throw new Error(
-          'Obat tidak ditemukan.'
-        );
-
-      }
-
-
-      if (
-        obat.status !==
-        'AKTIF'
-      ) {
-
-        throw new Error(
-          'Obat ' +
-          obat.namaObat +
-          ' sudah tidak aktif.'
-        );
-
-      }
-
-
-      /*
-       * Stok dicek saat resep dibuat,
-       * tetapi belum dikurangi.
-       */
-
-      if (
-        jumlah >
-        obat.stok
-      ) {
-
-        throw new Error(
-          'Stok ' +
-          obat.namaObat +
-          ' tidak mencukupi. ' +
-          'Stok tersedia: ' +
-          obat.stok
-        );
-
-      }
-
-
-      const subtotal =
-        jumlah *
-        obat.harga;
-
-
-      validatedDetails.push({
-
-        obatId:
-          obat.obatId,
-
-        kodeObat:
-          obat.kodeObat,
-
-        namaObat:
-          obat.namaObat,
-
-        jumlah:
-          jumlah,
-
-        satuan:
-          obat.satuan,
-
-        dosis:
-          String(
-            detail.dosis || ''
-          ).trim(),
-
-        aturanPakai:
-          String(
-            detail.aturanPakai || ''
-          ).trim(),
-
-        catatan:
-          String(
-            detail.catatan || ''
-          ).trim(),
-
-        harga:
-          obat.harga,
-
-        subtotal:
-          subtotal
-
-      });
 
     }
   );
 
 
-  /*
-   * ---------------------------------------------------
-   * BUAT RESEP
-   * ---------------------------------------------------
-   */
+  /* -----------------------------------------------------
+     BUAT ID RESEP
+     ----------------------------------------------------- */
 
   const resepId =
     'RSP-' +
     Utilities.getUuid()
+      .replace(/-/g, '')
       .substring(0, 8)
       .toUpperCase();
 
@@ -9606,252 +9760,199 @@ function savePrescription(
     new Date();
 
 
+  /* -----------------------------------------------------
+     ISI RESEP_ID KE DETAIL
+     ----------------------------------------------------- */
+
+  detailRows.forEach(
+    function(row) {
+
+      row[
+        detailMap.RESEP_ID
+      ] = resepId;
+
+    }
+  );
+
+
+  /* -----------------------------------------------------
+     SIMPAN RESEP_DETAIL TERLEBIH DAHULU
+     ----------------------------------------------------- */
+
+  if (detailRows.length > 0) {
+
+    const startRow =
+      detailSheet.getLastRow() + 1;
+
+    detailSheet
+      .getRange(
+        startRow,
+        1,
+        detailRows.length,
+        detailSheet.getLastColumn()
+      )
+      .setValues(detailRows);
+
+  }
+
+
+  /* -----------------------------------------------------
+     SIMPAN HEADER RESEP
+     ----------------------------------------------------- */
+
   const resepRow =
     new Array(
       resepSheet.getLastColumn()
     ).fill('');
 
 
-  resepRow[
-    resepMap.RESEP_ID
-  ] =
-    resepId;
-
-
-  resepRow[
-    resepMap.KUNJUNGAN_ID
-  ] =
-    kunjunganId;
-
-
-  resepRow[
-    resepMap.NO_RM
-  ] =
-    finalNoRM;
-
-
-  resepRow[
-    resepMap.TANGGAL
-  ] =
-    now;
-
-
-  resepRow[
-    resepMap.DOKTER_BIDAN
-  ] =
-    dokterBidan ||
-    session.name ||
-    session.username;
-
-
-  resepRow[
-    resepMap.STATUS
-  ] =
-    'MENUNGGU';
-
-
-  resepRow[
-    resepMap.CATATAN
-  ] =
-    catatan;
-
-
-  resepRow[
-    resepMap.CREATED_AT
-  ] =
-    now;
-
-
-  resepRow[
-    resepMap.UPDATED_AT
-  ] =
-    now;
-
-
-  resepSheet.appendRow(
-    resepRow
-  );
-
-
-  /*
-   * ---------------------------------------------------
-   * DETAIL RESEP
-   * ---------------------------------------------------
-   */
-
-  const detailRows = [];
-
-
-  validatedDetails.forEach(
-    function(detail) {
-
-      const detailRow =
-        new Array(
-          detailSheet.getLastColumn()
-        ).fill('');
-
-
-      const detailId =
-        'RSD-' +
-        Utilities.getUuid()
-          .substring(0, 8)
-          .toUpperCase();
-
-
-      detailRow[
-        detailMap.RESEP_DETAIL_ID
-      ] =
-        detailId;
-
-
-      detailRow[
-        detailMap.RESEP_ID
-      ] =
-        resepId;
-
-
-      detailRow[
-        detailMap.OBAT_ID
-      ] =
-        detail.obatId;
-
-
-      detailRow[
-        detailMap.KODE_OBAT
-      ] =
-        detail.kodeObat;
-
-
-      detailRow[
-        detailMap.NAMA_OBAT
-      ] =
-        detail.namaObat;
-
-
-      detailRow[
-        detailMap.JUMLAH
-      ] =
-        detail.jumlah;
-
-
-      detailRow[
-        detailMap.SATUAN
-      ] =
-        detail.satuan;
-
-
-      detailRow[
-        detailMap.DOSIS
-      ] =
-        detail.dosis;
-
-
-      detailRow[
-        detailMap.ATURAN_PAKAI
-      ] =
-        detail.aturanPakai;
-
-
-      detailRow[
-        detailMap.CATATAN
-      ] =
-        detail.catatan;
-
-
-      detailRow[
-        detailMap.HARGA
-      ] =
-        detail.harga;
-
-
-      detailRow[
-        detailMap.SUBTOTAL
-      ] =
-        detail.subtotal;
-
-
-      detailRows.push(
-        detailRow
-      );
-
-    }
-  );
-
+  if (
+    resepMap.RESEP_ID !== undefined
+  ) {
+    resepRow[
+      resepMap.RESEP_ID
+    ] = resepId;
+  }
 
   if (
-    detailRows.length
+    resepMap.KUNJUNGAN_ID !== undefined
   ) {
+    resepRow[
+      resepMap.KUNJUNGAN_ID
+    ] = kunjunganId;
+  }
 
-    detailSheet
-      .getRange(
-        detailSheet.getLastRow() + 1,
-        1,
-        detailRows.length,
-        detailRows[0].length
-      )
-      .setValues(
-        detailRows
+  if (
+    resepMap.NO_RM !== undefined
+  ) {
+    resepRow[
+      resepMap.NO_RM
+    ] = noRM;
+  }
+
+  if (
+    resepMap.TANGGAL !== undefined
+  ) {
+    resepRow[
+      resepMap.TANGGAL
+    ] = now;
+  }
+
+  if (
+    resepMap.DOKTER_BIDAN !== undefined
+  ) {
+    resepRow[
+      resepMap.DOKTER_BIDAN
+    ] =
+      dokterBidan ||
+      (
+        kunjunganMap.DOKTER_BIDAN !== undefined
+          ? String(
+              kunjungan[
+                kunjunganMap.DOKTER_BIDAN
+              ] || ''
+            ).trim()
+          : ''
       );
+  }
+
+  if (
+    resepMap.STATUS !== undefined
+  ) {
+    resepRow[
+      resepMap.STATUS
+    ] = 'MENUNGGU';
+  }
+
+  if (
+    resepMap.CATATAN !== undefined
+  ) {
+    resepRow[
+      resepMap.CATATAN
+    ] = catatan;
+  }
+
+  if (
+    resepMap.CREATED_AT !== undefined
+  ) {
+    resepRow[
+      resepMap.CREATED_AT
+    ] = now;
+  }
+
+  if (
+    resepMap.UPDATED_AT !== undefined
+  ) {
+    resepRow[
+      resepMap.UPDATED_AT
+    ] = now;
+  }
+
+
+  resepSheet
+    .getRange(
+      resepSheet.getLastRow() + 1,
+      1,
+      1,
+      resepRow.length
+    )
+    .setValues([resepRow]);
+
+
+  /* -----------------------------------------------------
+     AUDIT LOG
+     ----------------------------------------------------- */
+
+  try {
+
+    writeAuditLog_(
+      token,
+      'RESEP',
+      resepId,
+      'BUAT_RESEP',
+      'Membuat resep untuk pasien ' +
+      (
+        namaPasien ||
+        noRM
+      )
+    );
+
+  } catch (auditError) {
+
+    console.warn(
+      'Audit resep gagal: ' +
+      auditError.message
+    );
 
   }
 
 
-  /*
-   * ---------------------------------------------------
-   * AUDIT
-   * ---------------------------------------------------
-   */
-
-  writeAuditLog_(
-    session.userId,
-    session.username,
-    'TAMBAH',
-    'RESEP',
-    resepId,
-    'Membuat resep untuk Kunjungan ' +
-      kunjunganId +
-      ', NO RM ' +
-      finalNoRM
-  );
-
+  /* -----------------------------------------------------
+     HASIL
+     ----------------------------------------------------- */
 
   return {
 
-    success:
-      true,
+    success: true,
 
-    resepId:
-      resepId,
+    resepId: resepId,
 
-    kunjunganId:
-      kunjunganId,
+    kunjunganId: kunjunganId,
 
-    noRM:
-      finalNoRM,
+    pasienId: pasienId,
 
-    totalItem:
-      validatedDetails.length,
+    noRM: noRM,
 
-    total:
-      validatedDetails.reduce(
-        function(sum, item) {
+    namaPasien: namaPasien,
 
-          return (
-            sum +
-            Number(
-              item.subtotal || 0
-            )
-          );
+    totalItem: totalItem,
 
-        },
-        0
-      ),
+    total: total,
 
-    status:
-      'MENUNGGU',
+    status: 'MENUNGGU',
 
     message:
-      'Resep berhasil dibuat.'
+      'Resep berhasil disimpan.'
 
   };
 
@@ -10044,5 +10145,1389 @@ function updatePrescriptionStatus(
   throw new Error(
     'Resep tidak ditemukan.'
   );
+
+}
+
+/* =====================================================
+   V1 TAHAP 8D
+   FARMASI - PROSES RESEP
+   ===================================================== */
+
+
+/**
+ * =====================================================
+ * GET DAFTAR RESEP FARMASI
+ *
+ * Default:
+ * hanya resep MENUNGGU dan DIPROSES.
+ *
+ * Jika status dikirim:
+ * gunakan status tersebut.
+ * =====================================================
+ */
+function getPharmacyPrescriptions(
+  token,
+  search,
+  status
+) {
+
+  requireSession_(token);
+
+  search =
+    String(search || '')
+      .trim()
+      .toLowerCase();
+
+  status =
+    String(status || '')
+      .trim()
+      .toUpperCase();
+
+
+  const resepSheet =
+    getSheetByConfig('RESEP');
+
+  const detailSheet =
+    getSheetByConfig('RESEP_DETAIL');
+
+  const pasienSheet =
+    getSheetByConfig('PASIEN');
+
+
+  const resepValues =
+    resepSheet
+      .getDataRange()
+      .getValues();
+
+  const detailValues =
+    detailSheet
+      .getDataRange()
+      .getValues();
+
+  const pasienValues =
+    pasienSheet
+      .getDataRange()
+      .getValues();
+
+
+  if (
+    resepValues.length < 2
+  ) {
+
+    return {
+      total: 0,
+      data: []
+    };
+
+  }
+
+
+  const resepMap =
+    getHeaderMap_(resepSheet);
+
+  const detailMap =
+    getHeaderMap_(detailSheet);
+
+  const pasienMap =
+    getHeaderMap_(pasienSheet);
+
+
+  /*
+   * ---------------------------------------------------
+   * INDEX PASIEN
+   * ---------------------------------------------------
+   */
+
+  const patientByRM = {};
+
+
+  for (
+    let i = 1;
+    i < pasienValues.length;
+    i++
+  ) {
+
+    const row =
+      pasienValues[i];
+
+    const noRM =
+      pasienMap.NO_RM !== undefined
+        ? String(
+            row[
+              pasienMap.NO_RM
+            ] || ''
+          ).trim()
+        : '';
+
+    if (!noRM) {
+      continue;
+    }
+
+
+    patientByRM[noRM] = {
+
+      pasienId:
+        pasienMap.PASIEN_ID !== undefined
+          ? String(
+              row[
+                pasienMap.PASIEN_ID
+              ] || ''
+            ).trim()
+          : '',
+
+      noRM:
+        noRM,
+
+      nama:
+        pasienMap.NAMA_LENGKAP !== undefined
+          ? String(
+              row[
+                pasienMap.NAMA_LENGKAP
+              ] || ''
+            ).trim()
+          : ''
+
+    };
+
+  }
+
+
+  /*
+   * ---------------------------------------------------
+   * HITUNG DETAIL OBAT
+   * ---------------------------------------------------
+   */
+
+  const detailsByResep = {};
+
+
+  for (
+    let i = 1;
+    i < detailValues.length;
+    i++
+  ) {
+
+    const row =
+      detailValues[i];
+
+    const resepId =
+      detailMap.RESEP_ID !== undefined
+        ? String(
+            row[
+              detailMap.RESEP_ID
+            ] || ''
+          ).trim()
+        : '';
+
+    if (!resepId) {
+      continue;
+    }
+
+
+    if (
+      !detailsByResep[
+        resepId
+      ]
+    ) {
+
+      detailsByResep[
+        resepId
+      ] = [];
+
+    }
+
+
+    detailsByResep[
+      resepId
+    ].push({
+
+      obatId:
+        detailMap.OBAT_ID !== undefined
+          ? String(
+              row[
+                detailMap.OBAT_ID
+              ] || ''
+            ).trim()
+          : '',
+
+      namaObat:
+        detailMap.NAMA_OBAT !== undefined
+          ? String(
+              row[
+                detailMap.NAMA_OBAT
+              ] || ''
+            ).trim()
+          : '',
+
+      jumlah:
+        detailMap.JUMLAH !== undefined
+          ? Number(
+              row[
+                detailMap.JUMLAH
+              ] || 0
+            )
+          : 0,
+
+      satuan:
+        detailMap.SATUAN !== undefined
+          ? String(
+              row[
+                detailMap.SATUAN
+              ] || ''
+            ).trim()
+          : ''
+
+    });
+
+  }
+
+
+  const result = [];
+
+
+  /*
+   * ---------------------------------------------------
+   * RESEP
+   * ---------------------------------------------------
+   */
+
+  for (
+    let i = 1;
+    i < resepValues.length;
+    i++
+  ) {
+
+    const row =
+      resepValues[i];
+
+    const resepId =
+      String(
+        row[
+          resepMap.RESEP_ID
+        ] || ''
+      ).trim();
+
+    if (!resepId) {
+      continue;
+    }
+
+
+    const resepStatus =
+      String(
+        row[
+          resepMap.STATUS
+        ] || 'MENUNGGU'
+      )
+        .trim()
+        .toUpperCase();
+
+
+    /*
+     * Default Farmasi:
+     * MENUNGGU + DIPROSES
+     */
+
+    if (
+      !status &&
+      [
+        'MENUNGGU',
+        'DIPROSES'
+      ].indexOf(
+        resepStatus
+      ) === -1
+    ) {
+
+      continue;
+
+    }
+
+
+    if (
+      status &&
+      resepStatus !== status
+    ) {
+
+      continue;
+
+    }
+
+
+    const noRM =
+      String(
+        row[
+          resepMap.NO_RM
+        ] || ''
+      ).trim();
+
+
+    const kunjunganId =
+      String(
+        row[
+          resepMap.KUNJUNGAN_ID
+        ] || ''
+      ).trim();
+
+
+    const pasien =
+      patientByRM[
+        noRM
+      ] || null;
+
+
+    const namaPasien =
+      pasien
+        ? pasien.nama
+        : '';
+
+
+    const dokterBidan =
+      String(
+        row[
+          resepMap.DOKTER_BIDAN
+        ] || ''
+      ).trim();
+
+
+    const searchableText = [
+
+      resepId,
+      kunjunganId,
+      noRM,
+      namaPasien,
+      dokterBidan
+
+    ]
+      .join(' ')
+      .toLowerCase();
+
+
+    if (
+      search &&
+      searchableText.indexOf(
+        search
+      ) === -1
+    ) {
+
+      continue;
+
+    }
+
+
+    const details =
+      detailsByResep[
+        resepId
+      ] || [];
+
+
+    let totalItem = 0;
+
+
+    details.forEach(
+      function(item) {
+
+        totalItem +=
+          Number(
+            item.jumlah || 0
+          );
+
+      }
+    );
+
+
+    result.push({
+
+      resepId:
+        resepId,
+
+      kunjunganId:
+        kunjunganId,
+
+      pasienId:
+        pasien
+          ? pasien.pasienId
+          : '',
+
+      noRM:
+        noRM,
+
+      namaPasien:
+        namaPasien,
+
+      tanggal:
+        formatDate_(
+          row[
+            resepMap.TANGGAL
+          ]
+        ),
+
+      dokterBidan:
+        dokterBidan,
+
+      status:
+        resepStatus,
+
+      jumlahJenisObat:
+        details.length,
+
+      totalItem:
+        totalItem
+
+    });
+
+  }
+
+
+  result.reverse();
+
+
+  return {
+
+    total:
+      result.length,
+
+    data:
+      result
+
+  };
+
+}
+
+
+/**
+ * =====================================================
+ * GET DETAIL RESEP UNTUK FARMASI
+ *
+ * Sekaligus mengambil stok TERKINI.
+ * =====================================================
+ */
+function getPharmacyPrescriptionDetail(
+  token,
+  resepId
+) {
+
+  requireSession_(token);
+
+  resepId =
+    String(
+      resepId || ''
+    ).trim();
+
+
+  if (!resepId) {
+
+    throw new Error(
+      'ID resep tidak ditemukan.'
+    );
+
+  }
+
+
+  const resep =
+    getPrescription(
+      token,
+      resepId
+    );
+
+
+  const obatSheet =
+    getSheetByConfig('OBAT');
+
+
+  const obatValues =
+    obatSheet
+      .getDataRange()
+      .getValues();
+
+
+  const obatMap =
+    getHeaderMap_(obatSheet);
+
+
+  const obatById = {};
+
+
+  for (
+    let i = 1;
+    i < obatValues.length;
+    i++
+  ) {
+
+    const row =
+      obatValues[i];
+
+    const obatId =
+      String(
+        row[
+          obatMap.OBAT_ID
+        ] || ''
+      ).trim();
+
+
+    if (!obatId) {
+      continue;
+    }
+
+
+    obatById[
+      obatId
+    ] = {
+
+      obatId:
+        obatId,
+
+      kodeObat:
+        String(
+          row[
+            obatMap.KODE_OBAT
+          ] || ''
+        ).trim(),
+
+      namaObat:
+        String(
+          row[
+            obatMap.NAMA_OBAT
+          ] || ''
+        ).trim(),
+
+      satuan:
+        String(
+          row[
+            obatMap.SATUAN
+          ] || ''
+        ).trim(),
+
+      stok:
+        Number(
+          row[
+            obatMap.STOK
+          ] || 0
+        ),
+
+      harga:
+        Number(
+          row[
+            obatMap.HARGA_JUAL
+          ] || 0
+        ),
+
+      status:
+        String(
+          row[
+            obatMap.STATUS
+          ] || ''
+        )
+          .trim()
+          .toUpperCase(),
+
+      rowNumber:
+        i + 1
+
+    };
+
+  }
+
+
+  const items = [];
+
+
+  let semuaStokCukup =
+    true;
+
+
+  resep.detail.forEach(
+    function(detail) {
+
+      const obat =
+        obatById[
+          String(
+            detail.obatId
+          ).trim()
+        ];
+
+
+      if (!obat) {
+
+        semuaStokCukup =
+          false;
+
+
+        items.push({
+
+          obatId:
+            detail.obatId,
+
+          kodeObat:
+            detail.kodeObat,
+
+          namaObat:
+            detail.namaObat,
+
+          jumlah:
+            Number(
+              detail.jumlah || 0
+            ),
+
+          satuan:
+            detail.satuan,
+
+          stok:
+            0,
+
+          stokCukup:
+            false,
+
+          status:
+            'TIDAK_DITEMUKAN'
+
+        });
+
+        return;
+
+      }
+
+
+      const jumlah =
+        Number(
+          detail.jumlah || 0
+        );
+
+
+      const stokCukup =
+        obat.status ===
+          'AKTIF' &&
+        obat.stok >= jumlah;
+
+
+      if (!stokCukup) {
+
+        semuaStokCukup =
+          false;
+
+      }
+
+
+      items.push({
+
+        obatId:
+          obat.obatId,
+
+        kodeObat:
+          obat.kodeObat,
+
+        namaObat:
+          obat.namaObat,
+
+        jumlah:
+          jumlah,
+
+        satuan:
+          obat.satuan,
+
+        dosis:
+          detail.dosis || '',
+
+        aturanPakai:
+          detail.aturanPakai || '',
+
+        catatan:
+          detail.catatan || '',
+
+        harga:
+          detail.harga || 0,
+
+        subtotal:
+          detail.subtotal || 0,
+
+        stok:
+          obat.stok,
+
+        stokCukup:
+          stokCukup,
+
+        status:
+          obat.status
+
+      });
+
+    }
+  );
+
+
+  return {
+
+    resepId:
+      resep.resepId,
+
+    kunjunganId:
+      resep.kunjunganId,
+
+    noRM:
+      resep.noRM,
+
+    namaPasien:
+      resep.namaPasien,
+
+    tanggal:
+      resep.tanggal,
+
+    dokterBidan:
+      resep.dokterBidan,
+
+    status:
+      resep.status,
+
+    catatan:
+      resep.catatan,
+
+    semuaStokCukup:
+      semuaStokCukup,
+
+    items:
+      items
+
+  };
+
+}
+
+
+/**
+ * =====================================================
+ * PROSES RESEP FARMASI
+ *
+ * ATURAN:
+ *
+ * 1. Hanya MENUNGGU / DIPROSES
+ * 2. LockService
+ * 3. Baca stok TERBARU
+ * 4. Validasi SEMUA obat
+ * 5. Jika satu saja kurang:
+ *       TIDAK ADA stok yang dikurangi
+ * 6. Jika semua cukup:
+ *       kurangi semua stok
+ * 7. Status resep = SELESAI
+ *
+ * Tidak boleh ada stok negatif.
+ * =====================================================
+ */
+function processPrescription(
+  token,
+  resepId
+) {
+
+  const session =
+    requireSession_(token);
+
+
+  resepId =
+    String(
+      resepId || ''
+    ).trim();
+
+
+  if (!resepId) {
+
+    throw new Error(
+      'ID resep tidak ditemukan.'
+    );
+
+  }
+
+
+  const lock =
+    LockService.getScriptLock();
+
+
+  lock.waitLock(30000);
+
+
+  try {
+
+    /*
+     * -------------------------------------------------
+     * BACA RESEP
+     * -------------------------------------------------
+     */
+
+    const resepSheet =
+      getSheetByConfig('RESEP');
+
+    const detailSheet =
+      getSheetByConfig('RESEP_DETAIL');
+
+    const obatSheet =
+      getSheetByConfig('OBAT');
+
+
+    const resepValues =
+      resepSheet
+        .getDataRange()
+        .getValues();
+
+    const detailValues =
+      detailSheet
+        .getDataRange()
+        .getValues();
+
+    const obatValues =
+      obatSheet
+        .getDataRange()
+        .getValues();
+
+
+    const resepMap =
+      getHeaderMap_(resepSheet);
+
+    const detailMap =
+      getHeaderMap_(detailSheet);
+
+    const obatMap =
+      getHeaderMap_(obatSheet);
+
+
+    /*
+     * -------------------------------------------------
+     * CARI RESEP
+     * -------------------------------------------------
+     */
+
+    let resepRowNumber =
+      -1;
+
+    let resepRow =
+      null;
+
+
+    for (
+      let i = 1;
+      i < resepValues.length;
+      i++
+    ) {
+
+      const id =
+        String(
+          resepValues[i][
+            resepMap.RESEP_ID
+          ] || ''
+        ).trim();
+
+
+      if (
+        id === resepId
+      ) {
+
+        resepRowNumber =
+          i + 1;
+
+        resepRow =
+          resepValues[i];
+
+        break;
+
+      }
+
+    }
+
+
+    if (
+      resepRowNumber === -1
+    ) {
+
+      throw new Error(
+        'Resep tidak ditemukan.'
+      );
+
+    }
+
+
+    const currentStatus =
+      String(
+        resepRow[
+          resepMap.STATUS
+        ] || ''
+      )
+        .trim()
+        .toUpperCase();
+
+
+    /*
+     * Resep yang sudah selesai
+     * tidak boleh diproses ulang.
+     */
+
+    if (
+      currentStatus ===
+      'SELESAI'
+    ) {
+
+      throw new Error(
+        'Resep sudah selesai diproses.'
+      );
+
+    }
+
+
+    if (
+      currentStatus ===
+      'BATAL'
+    ) {
+
+      throw new Error(
+        'Resep sudah dibatalkan.'
+      );
+
+    }
+
+
+    if (
+      [
+        'MENUNGGU',
+        'DIPROSES'
+      ].indexOf(
+        currentStatus
+      ) === -1
+    ) {
+
+      throw new Error(
+        'Status resep tidak dapat diproses: ' +
+        currentStatus
+      );
+
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * AMBIL DETAIL
+     * -------------------------------------------------
+     */
+
+    const details = [];
+
+
+    for (
+      let i = 1;
+      i < detailValues.length;
+      i++
+    ) {
+
+      const row =
+        detailValues[i];
+
+
+      const id =
+        String(
+          row[
+            detailMap.RESEP_ID
+          ] || ''
+        ).trim();
+
+
+      if (
+        id !== resepId
+      ) {
+
+        continue;
+
+      }
+
+
+      const obatId =
+        String(
+          row[
+            detailMap.OBAT_ID
+          ] || ''
+        ).trim();
+
+
+      const jumlah =
+        Number(
+          row[
+            detailMap.JUMLAH
+          ] || 0
+        );
+
+
+      if (!obatId) {
+
+        throw new Error(
+          'Ada detail resep tanpa OBAT_ID.'
+        );
+
+      }
+
+
+      if (
+        !isFinite(jumlah) ||
+        jumlah <= 0
+      ) {
+
+        throw new Error(
+          'Jumlah obat pada resep tidak valid.'
+        );
+
+      }
+
+
+      details.push({
+
+        obatId:
+          obatId,
+
+        jumlah:
+          jumlah,
+
+        namaObat:
+          String(
+            row[
+              detailMap.NAMA_OBAT
+            ] || ''
+          ).trim()
+
+      });
+
+    }
+
+
+    if (
+      details.length === 0
+    ) {
+
+      throw new Error(
+        'Resep tidak memiliki detail obat.'
+      );
+
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * INDEX STOK TERBARU
+     * -------------------------------------------------
+     */
+
+    const obatById = {};
+
+
+    for (
+      let i = 1;
+      i < obatValues.length;
+      i++
+    ) {
+
+      const row =
+        obatValues[i];
+
+
+      const obatId =
+        String(
+          row[
+            obatMap.OBAT_ID
+          ] || ''
+        ).trim();
+
+
+      if (!obatId) {
+        continue;
+      }
+
+
+      obatById[
+        obatId
+      ] = {
+
+        obatId:
+          obatId,
+
+        namaObat:
+          String(
+            row[
+              obatMap.NAMA_OBAT
+            ] || ''
+          ).trim(),
+
+        stok:
+          Number(
+            row[
+              obatMap.STOK
+            ] || 0
+          ),
+
+        status:
+          String(
+            row[
+              obatMap.STATUS
+            ] || ''
+          )
+            .trim()
+            .toUpperCase(),
+
+        rowNumber:
+          i + 1
+
+      };
+
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * VALIDASI SEMUA STOK
+     *
+     * BELUM ADA PERUBAHAN STOK
+     * -------------------------------------------------
+     */
+
+    const stockChanges = [];
+
+
+    details.forEach(
+      function(detail) {
+
+        const obat =
+          obatById[
+            detail.obatId
+          ];
+
+
+        if (!obat) {
+
+          throw new Error(
+            'Obat "' +
+            detail.obatId +
+            '" tidak ditemukan.'
+          );
+
+        }
+
+
+        if (
+          obat.status !==
+          'AKTIF'
+        ) {
+
+          throw new Error(
+            'Obat "' +
+            obat.namaObat +
+            '" sudah tidak aktif.'
+          );
+
+        }
+
+
+        if (
+          obat.stok < 0
+        ) {
+
+          throw new Error(
+            'Stok "' +
+            obat.namaObat +
+            '" sudah tidak valid.'
+          );
+
+        }
+
+
+        const jumlah =
+          Number(
+            detail.jumlah
+          );
+
+
+        if (
+          obat.stok <
+          jumlah
+        ) {
+
+          throw new Error(
+            'Stok ' +
+            obat.namaObat +
+            ' tidak mencukupi. ' +
+            'Stok tersedia: ' +
+            obat.stok +
+            ', diperlukan: ' +
+            jumlah
+          );
+
+        }
+
+
+        stockChanges.push({
+
+          obatId:
+            obat.obatId,
+
+          namaObat:
+            obat.namaObat,
+
+          rowNumber:
+            obat.rowNumber,
+
+          stokSebelum:
+            obat.stok,
+
+          jumlah:
+            jumlah,
+
+          stokSesudah:
+            obat.stok -
+            jumlah
+
+        });
+
+      }
+    );
+
+
+    /*
+     * -------------------------------------------------
+     * SEMUA STOK VALID
+     *
+     * SEKARANG BARU KURANGI STOK
+     * -------------------------------------------------
+     */
+
+    stockChanges.forEach(
+      function(change) {
+
+        obatSheet
+          .getRange(
+            change.rowNumber,
+            obatMap.STOK + 1
+          )
+          .setValue(
+            change.stokSesudah
+          );
+
+
+        if (
+          obatMap.UPDATED_AT !==
+          undefined
+        ) {
+
+          obatSheet
+            .getRange(
+              change.rowNumber,
+              obatMap.UPDATED_AT + 1
+            )
+            .setValue(
+              new Date()
+            );
+
+        }
+
+      }
+    );
+
+
+    /*
+     * -------------------------------------------------
+     * STATUS RESEP
+     * -------------------------------------------------
+     */
+
+    resepSheet
+      .getRange(
+        resepRowNumber,
+        resepMap.STATUS + 1
+      )
+      .setValue(
+        'SELESAI'
+      );
+
+
+    if (
+      resepMap.UPDATED_AT !==
+      undefined
+    ) {
+
+      resepSheet
+        .getRange(
+          resepRowNumber,
+          resepMap.UPDATED_AT + 1
+        )
+        .setValue(
+          new Date()
+        );
+
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * AUDIT RESEP
+     * -------------------------------------------------
+     */
+
+    writeAuditLog_(
+      session.userId,
+      session.username,
+      'PROSES_RESEP',
+      'RESEP',
+      resepId,
+      'Resep selesai diproses. ' +
+      'Jumlah jenis obat: ' +
+      stockChanges.length
+    );
+
+
+    /*
+     * -------------------------------------------------
+     * AUDIT STOK
+     * -------------------------------------------------
+     *
+     * Jika sistem belum mempunyai
+     * sheet STOK_LOG, bagian ini
+     * cukup menggunakan AUDIT_LOG.
+     * -------------------------------------------------
+     */
+
+    stockChanges.forEach(
+      function(change) {
+
+        writeAuditLog_(
+          session.userId,
+          session.username,
+          'STOK_KELUAR',
+          'OBAT',
+          change.obatId,
+          'Resep ' +
+          resepId +
+          ': ' +
+          change.namaObat +
+          ' ' +
+          change.stokSebelum +
+          ' -> ' +
+          change.stokSesudah +
+          ' (keluar ' +
+          change.jumlah +
+          ')'
+        );
+
+      }
+    );
+
+
+    return {
+
+      success:
+        true,
+
+      resepId:
+        resepId,
+
+      status:
+        'SELESAI',
+
+      changes:
+        stockChanges
+
+    };
+
+
+  } finally {
+
+    lock.releaseLock();
+
+  }
 
 }
