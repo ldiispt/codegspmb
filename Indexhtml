@@ -1249,7 +1249,7 @@
 
       <div
         class="menu-item"
-        onclick="placeholderPage('Pembayaran')"
+        onclick="showPage('pembayaran', this)"
       >
         <span class="menu-icon">💳</span>
         Pembayaran
@@ -7765,13 +7765,12 @@ function toggleMedicineStatus(
     if (page === 'antrian') { document.getElementById('topbarTitle').textContent='Antrian'; loadQueuePage(); return; }
     if (page === 'pemeriksaan') { document.getElementById('topbarTitle').textContent='Pemeriksaan'; loadExaminationPage(); return; }
     if (page === 'rekam-medis') { document.getElementById('topbarTitle').textContent='Rekam Medis'; loadMedicalRecordPage(); return; }
-    if (page === 'obat') { document.getElementById('topbarTitle').textContent='Data Obat'; loadMedicinePage
-    (); return; }
-    if (page === 'resep') { document.getElementById('topbarTitle').textContent='Resep'; loadPrescriptionPage
-    ();return; }
+    if (page === 'obat') { document.getElementById('topbarTitle').textContent='Data Obat'; loadMedicinePage (); return; }
+    if (page === 'resep') { document.getElementById('topbarTitle').textContent='Resep'; loadPrescriptionPage ();return; }
     if (page === 'farmasi') { document.getElementById('topbarTitle').textContent = 'Pelayanan Farmasi'; loadPharmacyPage();return; }
     if (page === 'transaksi') { document.getElementById('topbarTitle').textContent = 'Transaksi'; loadTransactionPage(); return; }
-    
+    if (page === 'pembayaran') { document.getElementById('topbarTitle').textContent = 'Pembayaran'; loadPaymentPage(); return; }
+
   placeholderPage(page);
   };
 })();
@@ -13448,6 +13447,1516 @@ function cancelTransactionUI(
     );
 
 }
+
+function loadPaymentPage() {
+
+  const content =
+    document.getElementById('content');
+
+  if (!content) {
+    return;
+  }
+
+  content.innerHTML = `
+    <div class="card">
+
+      <div class="card-header">
+        <div>
+          <h2 style="margin:0;">
+            Pembayaran
+          </h2>
+
+          <div style="
+            margin-top:6px;
+            color:#64748b;
+            font-size:14px;
+          ">
+            Daftar kunjungan yang memiliki tagihan.
+          </div>
+        </div>
+      </div>
+
+      <div style="
+        margin:20px 0;
+      ">
+
+        <input
+          type="text"
+          id="paymentVisitSearch"
+          placeholder="Cari No. RM / ID Kunjungan..."
+          style="
+            width:100%;
+            box-sizing:border-box;
+            padding:12px 14px;
+            border:1px solid #d1d5db;
+            border-radius:10px;
+            font-size:14px;
+          "
+          oninput="filterPaymentVisits()"
+        >
+
+      </div>
+
+      <div id="paymentVisitLoading"
+        style="
+          padding:30px;
+          text-align:center;
+          color:#64748b;
+        ">
+        Memuat data kunjungan...
+      </div>
+
+      <div id="paymentVisitList"></div>
+
+    </div>
+  `;
+
+  loadPaymentVisits();
+
+}
+
+let paymentVisitData = [];
+
+
+/* ============================================================
+   MEMUAT DAFTAR KUNJUNGAN UNTUK PEMBAYARAN
+   ============================================================ */
+
+function loadPaymentVisits() {
+
+  const loading =
+    document.getElementById(
+      'paymentVisitLoading'
+    );
+
+  const list =
+    document.getElementById(
+      'paymentVisitList'
+    );
+
+  if (!list) {
+    return;
+  }
+
+  if (loading) {
+    loading.style.display =
+      'block';
+  }
+
+  list.innerHTML = '';
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+
+      paymentVisitData =
+        Array.isArray(result)
+          ? result
+          : [];
+
+      if (loading) {
+        loading.style.display =
+          'none';
+      }
+
+      renderPaymentVisits(
+        paymentVisitData
+      );
+
+    })
+    .withFailureHandler(function(error) {
+
+      if (loading) {
+        loading.style.display =
+          'none';
+      }
+
+      list.innerHTML = `
+        <div style="
+          padding:20px;
+          background:#fef2f2;
+          color:#b91c1c;
+          border-radius:10px;
+        ">
+          Gagal memuat data pembayaran.
+          <br>
+          <small>
+            ${
+              error &&
+              error.message
+                ? error.message
+                : 'Terjadi kesalahan.'
+            }
+          </small>
+        </div>
+      `;
+
+    })
+    .getVisitsForPayment(
+      typeof sessionToken !== 'undefined'
+        ? sessionToken
+        : '',
+      '',
+      ''
+    );
+
+}
+
+function renderPaymentVisits(rows) {
+
+  const list =
+    document.getElementById(
+      'paymentVisitList'
+    );
+
+  if (!list) {
+    return;
+  }
+
+  if (!rows || rows.length === 0) {
+
+    list.innerHTML = `
+      <div style="
+        padding:30px;
+        text-align:center;
+        color:#64748b;
+      ">
+        Tidak ada kunjungan yang dapat ditampilkan.
+      </div>
+    `;
+
+    return;
+  }
+
+
+  let html = `
+    <div style="
+      overflow-x:auto;
+    ">
+
+      <table style="
+        width:100%;
+        border-collapse:collapse;
+        font-size:14px;
+      ">
+
+        <thead>
+
+          <tr style="
+            border-bottom:1px solid #e5e7eb;
+            text-align:left;
+          ">
+
+            <th style="padding:12px;">
+              No
+            </th>
+
+            <th style="padding:12px;">
+              Tanggal
+            </th>
+
+            <th style="padding:12px;">
+              No. RM
+            </th>
+
+            <th style="padding:12px;">
+              Jenis Kunjungan
+            </th>
+
+            <th style="padding:12px;">
+              Total Tagihan
+            </th>
+
+            <th style="padding:12px;">
+              Sudah Bayar
+            </th>
+
+            <th style="padding:12px;">
+              Sisa
+            </th>
+
+            <th style="padding:12px;">
+              Status
+            </th>
+
+            <th style="padding:12px;">
+              Aksi
+            </th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+  `;
+
+
+  rows.forEach(function(row, index) {
+
+    const total =
+      Number(
+        row.totalTagihan || 0
+      );
+
+    const sudahBayar =
+      Number(
+        row.sudahBayar || 0
+      );
+
+    const sisa =
+      Number(
+        row.sisa || 0
+      );
+
+
+    html += `
+      <tr style="
+        border-bottom:1px solid #f1f5f9;
+      ">
+
+        <td style="padding:12px;">
+          ${index + 1}
+        </td>
+
+        <td style="padding:12px;">
+          ${row.tanggal || '-'}
+        </td>
+
+        <td style="padding:12px;">
+          ${row.noRM || '-'}
+        </td>
+
+        <td style="padding:12px;">
+          ${row.jenisKunjungan || '-'}
+        </td>
+
+        <td style="
+          padding:12px;
+          font-weight:600;
+        ">
+          ${formatPaymentCurrency(total)}
+        </td>
+
+        <td style="padding:12px;">
+          ${formatPaymentCurrency(sudahBayar)}
+        </td>
+
+        <td style="
+          padding:12px;
+          font-weight:600;
+        ">
+          ${formatPaymentCurrency(sisa)}
+        </td>
+
+        <td style="padding:12px;">
+          ${renderPaymentStatus(row.statusBayar)}
+        </td>
+
+        <td style="padding:12px;">
+
+          <button
+            type="button"
+            onclick="
+              openPaymentVisit(
+                '${escapePaymentValue(
+                  row.kunjunganId
+              )}'
+            )
+          "
+            style="
+              border:0;
+              border-radius:8px;
+              padding:8px 12px;
+              cursor:pointer;
+            "
+          >
+            Detail
+          </button>
+
+        </td>
+
+      </tr>
+    `;
+
+  });
+
+
+  html += `
+        </tbody>
+
+      </table>
+
+    </div>
+  `;
+
+
+  list.innerHTML =
+    html;
+
+}
+
+function filterPaymentVisits() {
+
+  const input =
+    document.getElementById(
+      'paymentVisitSearch'
+    );
+
+  const keyword =
+    input
+      ? String(
+          input.value || ''
+        )
+          .trim()
+          .toLowerCase()
+      : '';
+
+
+  if (!keyword) {
+
+    renderPaymentVisits(
+      paymentVisitData
+    );
+
+    return;
+
+  }
+
+
+  const filtered =
+    paymentVisitData.filter(
+      function(row) {
+
+        return (
+
+          String(
+            row.noRM || ''
+          )
+            .toLowerCase()
+            .includes(keyword)
+
+          ||
+
+          String(
+            row.kunjunganId || ''
+          )
+            .toLowerCase()
+            .includes(keyword)
+
+          ||
+
+          String(
+            row.jenisKunjungan || ''
+          )
+            .toLowerCase()
+            .includes(keyword)
+
+        );
+
+      }
+    );
+
+
+  renderPaymentVisits(
+    filtered
+  );
+
+}
+
+function formatPaymentCurrency(value) {
+
+  return 'Rp ' +
+    Number(
+      value || 0
+    ).toLocaleString(
+      'id-ID'
+    );
+
+}
+
+
+function renderPaymentStatus(status) {
+
+  const value =
+    String(
+      status || 'BELUM_BAYAR'
+    )
+      .toUpperCase();
+
+
+  let background =
+    '#fef3c7';
+
+  let color =
+    '#92400e';
+
+
+  if (value === 'LUNAS') {
+
+    background =
+      '#dcfce7';
+
+    color =
+      '#166534';
+
+  }
+  else if (
+    value === 'SEBAGIAN'
+  ) {
+
+    background =
+      '#dbeafe';
+
+    color =
+      '#1d4ed8';
+
+  }
+
+
+  return `
+    <span style="
+      display:inline-block;
+      padding:5px 9px;
+      border-radius:999px;
+      background:${background};
+      color:${color};
+      font-size:12px;
+      font-weight:600;
+    ">
+      ${value}
+    </span>
+  `;
+
+}
+
+/* =====================================================
+   DETAIL KUNJUNGAN PEMBAYARAN
+   ===================================================== */
+
+function openPaymentVisit(kunjunganId) {
+
+  kunjunganId =
+    String(kunjunganId || '').trim();
+
+  console.log(
+    'openPaymentVisit:',
+    kunjunganId
+  );
+
+  if (!kunjunganId) {
+
+    alert(
+      'ID Kunjungan tidak ditemukan.'
+    );
+
+    return;
+  }
+
+
+  const container =
+    document.getElementById(
+      'paymentVisitList'
+    );
+
+  if (!container) {
+
+    alert(
+      'Area detail pembayaran tidak ditemukan.'
+    );
+
+    return;
+  }
+
+
+  container.innerHTML = `
+    <div style="
+      padding:40px;
+      text-align:center;
+      color:#64748b;
+    ">
+      Memuat detail tagihan...
+    </div>
+  `;
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        console.log(
+          'getVisitBillingSummary result:',
+          result
+        );
+
+        if (
+          !result ||
+          result.success === false
+        ) {
+
+          container.innerHTML = `
+            <div style="
+              padding:30px;
+              color:#b91c1c;
+              text-align:center;
+            ">
+              ${
+                result &&
+                result.message
+                  ? escapePaymentValue(
+                      result.message
+                    )
+                  : 'Data tagihan tidak ditemukan.'
+              }
+
+              <br><br>
+
+              <button
+                type="button"
+                onclick="loadPaymentPage()"
+                style="
+                  border:0;
+                  border-radius:8px;
+                  padding:9px 15px;
+                  cursor:pointer;
+                "
+              >
+                ← Kembali
+              </button>
+
+            </div>
+          `;
+
+          return;
+        }
+
+
+        renderPaymentVisitDetail(
+          result
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        console.error(
+          'getVisitBillingSummary error:',
+          error
+        );
+
+        container.innerHTML = `
+          <div style="
+            padding:30px;
+            color:#b91c1c;
+            text-align:center;
+          ">
+
+            Gagal memuat detail tagihan.
+
+            <br><br>
+
+            ${
+              error &&
+              error.message
+                ? escapePaymentValue(
+                    error.message
+                  )
+                : 'Terjadi kesalahan.'
+            }
+
+            <br><br>
+
+            <button
+              type="button"
+              onclick="loadPaymentPage()"
+              style="
+                border:0;
+                border-radius:8px;
+                padding:9px 15px;
+                cursor:pointer;
+              "
+            >
+              ← Kembali
+            </button>
+
+          </div>
+        `;
+
+      }
+    )
+
+    .getVisitBillingSummary(
+      sessionToken,
+      kunjunganId
+    );
+
+}
+
+ 
+function renderPaymentVisitDetail(data) {
+
+  const container =
+    document.getElementById(
+      'paymentVisitList'
+    );
+
+  if (!container) {
+    return;
+  }
+
+
+  const totalTindakan =
+    Number(
+      data.totalTindakan || 0
+    );
+
+
+  const totalObat =
+    Number(
+      data.totalObat || 0
+    );
+
+
+  const totalTagihan =
+    Number(
+      data.totalTagihan || 0
+    );
+
+
+  const namaTindakan =
+    data.namaTindakan ||
+    (
+      data.tindakan &&
+      data.tindakan.nama
+    ) ||
+    'Tindakan';
+
+
+  /*
+   * Simpan KUNJUNGAN_ID dari data detail.
+   * Dipakai untuk membuka form pembayaran.
+   */
+  const kunjunganId =
+    String(
+      data.kunjunganId ||
+      data.KUNJUNGAN_ID ||
+      ''
+    ).trim();
+
+
+  container.innerHTML = `
+
+    <div style="
+      padding:20px;
+    ">
+
+
+      <!-- HEADER -->
+
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin-bottom:20px;
+        gap:10px;
+      ">
+
+        <div>
+
+          <h3 style="
+            margin:0 0 5px 0;
+          ">
+            Detail Tagihan
+          </h3>
+
+
+          <div style="
+            color:#64748b;
+            font-size:14px;
+          ">
+
+            ${escapePaymentValue(
+              data.noRM || '-'
+            )}
+
+            ·
+
+            ${escapePaymentValue(
+              data.jenisKunjungan || '-'
+            )}
+
+          </div>
+
+        </div>
+
+
+        <button
+          type="button"
+          onclick="loadPaymentPage()"
+          style="
+            border:0;
+            border-radius:8px;
+            padding:9px 15px;
+            cursor:pointer;
+          "
+        >
+          ← Kembali
+        </button>
+
+      </div>
+
+
+      <!-- RINCIAN TAGIHAN -->
+
+      <div style="
+        border:1px solid #e5e7eb;
+        border-radius:10px;
+        overflow:hidden;
+      ">
+
+        <table style="
+          width:100%;
+          border-collapse:collapse;
+        ">
+
+          <thead>
+
+            <tr style="
+              background:#f8fafc;
+            ">
+
+              <th style="
+                padding:12px;
+                text-align:left;
+              ">
+                Rincian
+              </th>
+
+
+              <th style="
+                padding:12px;
+                text-align:right;
+              ">
+                Jumlah
+              </th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+
+            <!-- TINDAKAN -->
+
+            <tr>
+
+              <td style="
+                padding:12px;
+                border-top:1px solid #f1f5f9;
+              ">
+
+                ${escapePaymentValue(
+                  namaTindakan
+                )}
+
+              </td>
+
+
+              <td style="
+                padding:12px;
+                text-align:right;
+                border-top:1px solid #f1f5f9;
+              ">
+
+                ${formatPaymentCurrency(
+                  totalTindakan
+                )}
+
+              </td>
+
+            </tr>
+
+
+            <!-- OBAT -->
+
+            <tr>
+
+              <td style="
+                padding:12px;
+                border-top:1px solid #f1f5f9;
+              ">
+
+                Obat
+
+              </td>
+
+
+              <td style="
+                padding:12px;
+                text-align:right;
+                border-top:1px solid #f1f5f9;
+              ">
+
+                ${formatPaymentCurrency(
+                  totalObat
+                )}
+
+              </td>
+
+            </tr>
+
+
+            <!-- TOTAL -->
+
+            <tr>
+
+              <td style="
+                padding:14px 12px;
+                font-weight:700;
+                border-top:1px solid #e5e7eb;
+              ">
+
+                TOTAL TAGIHAN
+
+              </td>
+
+
+              <td style="
+                padding:14px 12px;
+                text-align:right;
+                font-weight:700;
+                border-top:1px solid #e5e7eb;
+              ">
+
+                ${formatPaymentCurrency(
+                  totalTagihan
+                )}
+
+              </td>
+
+            </tr>
+
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+
+      <!-- STATUS PEMBAYARAN -->
+
+      <div style="
+        margin-top:20px;
+        padding:15px;
+        background:#f8fafc;
+        border-radius:10px;
+      ">
+
+        <div style="
+          margin-bottom:8px;
+        ">
+
+          <strong>
+            Status Pembayaran
+          </strong>
+
+        </div>
+
+
+        <div>
+
+          ${renderPaymentStatus(
+            data.statusBayar ||
+            'BELUM_BAYAR'
+          )}
+
+        </div>
+
+      </div>
+
+
+      <!-- ACTION -->
+
+      <div style="
+        margin-top:20px;
+        display:flex;
+        justify-content:flex-end;
+        gap:10px;
+        flex-wrap:wrap;
+      ">
+
+
+        <button
+          type="button"
+          onclick="loadPaymentPage()"
+          style="
+            border:0;
+            border-radius:8px;
+            padding:10px 18px;
+            cursor:pointer;
+          "
+        >
+          ← Kembali
+        </button>
+
+
+        ${
+          kunjunganId
+            ? `
+              <button
+                type="button"
+                onclick="openPaymentForm('${escapePaymentValue(
+                  kunjunganId
+                )}')"
+                style="
+                  border:0;
+                  border-radius:8px;
+                  padding:10px 18px;
+                  cursor:pointer;
+                  font-weight:600;
+                "
+              >
+                💳 PROSES PEMBAYARAN
+              </button>
+            `
+            : ''
+        }
+
+      </div>
+
+
+    </div>
+
+  `;
+
+}
+ 
+
+
+function escapePaymentValue(value) {
+
+  return String(
+    value || ''
+  )
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+
+}
+
+function openPaymentForm(kunjunganId) {
+
+  kunjunganId =
+    String(kunjunganId || '').trim();
+
+  if (!kunjunganId) {
+    alert('ID Kunjungan tidak ditemukan.');
+    return;
+  }
+
+  const container =
+    document.getElementById('paymentVisitList');
+
+  if (!container) {
+    alert('Area pembayaran tidak ditemukan.');
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="
+      padding:20px;
+    ">
+
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:10px;
+        margin-bottom:20px;
+      ">
+
+        <div>
+          <h3 style="
+            margin:0 0 5px 0;
+          ">
+            Proses Pembayaran
+          </h3>
+
+          <div style="
+            color:#64748b;
+            font-size:14px;
+          ">
+            Kunjungan:
+            ${escapePaymentValue(kunjunganId)}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onclick="openPaymentVisit('${escapePaymentValue(kunjunganId)}')"
+          style="
+            border:0;
+            border-radius:8px;
+            padding:9px 15px;
+            cursor:pointer;
+          "
+        >
+          ← Kembali
+        </button>
+
+      </div>
+
+
+      <div
+        id="paymentFormContent"
+        style="
+          border:1px solid #e5e7eb;
+          border-radius:12px;
+          padding:20px;
+        "
+      >
+
+        <div style="
+          text-align:center;
+          padding:20px;
+          color:#64748b;
+        ">
+          Memuat data pembayaran...
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        console.log(
+          'getPaymentSummary:',
+          result
+        );
+
+        renderPaymentForm(
+          kunjunganId,
+          result
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        console.error(
+          'getPaymentSummary error:',
+          error
+        );
+
+        const form =
+          document.getElementById(
+            'paymentFormContent'
+          );
+
+        if (!form) {
+          return;
+        }
+
+        form.innerHTML = `
+          <div style="
+            color:#b91c1c;
+            padding:20px;
+          ">
+            Gagal memuat data pembayaran.
+
+            <br><br>
+
+            ${
+              error &&
+              error.message
+                ? escapePaymentValue(
+                    error.message
+                  )
+                : 'Terjadi kesalahan.'
+            }
+          </div>
+        `;
+
+      }
+    )
+
+    .getPaymentSummary(
+      sessionToken,
+      kunjunganId
+    );
+
+}
+
+function renderPaymentForm(
+  kunjunganId,
+  payment
+) {
+
+  const form =
+    document.getElementById(
+      'paymentFormContent'
+    );
+
+  if (!form) {
+    return;
+  }
+
+
+  payment =
+    payment || {};
+
+
+  const totalTagihan =
+    Number(
+      payment.totalTagihan || 0
+    );
+
+
+  const sudahBayar =
+    Number(
+      payment.totalDibayar ||
+      payment.sudahBayar ||
+      payment.totalBayar ||
+      0
+    );
+
+
+  const sisa =
+    Math.max(
+      0,
+      totalTagihan - sudahBayar
+    );
+
+
+  if (sisa <= 0) {
+
+    form.innerHTML = `
+
+      <div style="
+        padding:20px;
+        text-align:center;
+      ">
+
+        <div style="
+          font-size:40px;
+          margin-bottom:10px;
+        ">
+          ✓
+        </div>
+
+        <h3>
+          Tagihan Sudah Lunas
+        </h3>
+
+        <p>
+          Tidak ada sisa pembayaran.
+        </p>
+
+        <button
+          type="button"
+          onclick="openPaymentVisit('${escapePaymentValue(kunjunganId)}')"
+          style="
+            border:0;
+            border-radius:8px;
+            padding:10px 18px;
+            cursor:pointer;
+          "
+        >
+          Kembali
+        </button>
+
+      </div>
+
+    `;
+
+    return;
+  }
+
+
+  form.innerHTML = `
+
+    <div style="
+      margin-bottom:20px;
+    ">
+
+      <div style="
+        color:#64748b;
+        font-size:13px;
+        margin-bottom:5px;
+      ">
+        Sisa Tagihan
+      </div>
+
+      <div style="
+        font-size:28px;
+        font-weight:700;
+      ">
+        ${formatPaymentCurrency(sisa)}
+      </div>
+
+    </div>
+
+
+    <div style="
+      margin-bottom:18px;
+    ">
+
+      <label style="
+        display:block;
+        margin-bottom:7px;
+        font-weight:600;
+      ">
+        Metode Pembayaran
+      </label>
+
+      <select
+        id="paymentMethod"
+        onchange="calculatePaymentChange()"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          padding:11px 12px;
+          border:1px solid #d1d5db;
+          border-radius:8px;
+          font-size:14px;
+        "
+      >
+
+        <option value="">
+          Pilih metode pembayaran
+        </option>
+
+        <option value="TUNAI">
+          TUNAI
+        </option>
+
+        <option value="TRANSFER">
+          TRANSFER
+        </option>
+
+        <option value="QRIS">
+          QRIS
+        </option>
+
+        <option value="DEBIT">
+          DEBIT
+        </option>
+
+        <option value="KARTU">
+          KARTU
+        </option>
+
+      </select>
+
+    </div>
+
+
+    <div style="
+      margin-bottom:18px;
+    ">
+
+      <label style="
+        display:block;
+        margin-bottom:7px;
+        font-weight:600;
+      ">
+        Jumlah Bayar
+      </label>
+
+      <input
+        type="number"
+        id="paymentAmount"
+        min="0"
+        step="1"
+        value=""
+        oninput="calculatePaymentChange()"
+        placeholder="Masukkan jumlah pembayaran"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          padding:11px 12px;
+          border:1px solid #d1d5db;
+          border-radius:8px;
+          font-size:14px;
+        "
+      />
+
+    </div>
+
+
+    <div
+      id="paymentChangeBox"
+      style="
+        padding:15px;
+        border-radius:10px;
+        background:#f8fafc;
+        margin-bottom:20px;
+      "
+    >
+
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        margin-bottom:8px;
+      ">
+        <span>
+          Sisa Tagihan
+        </span>
+
+        <strong>
+          ${formatPaymentCurrency(sisa)}
+        </strong>
+      </div>
+
+      <div style="
+        display:flex;
+        justify-content:space-between;
+      ">
+        <span>
+          Kembalian
+        </span>
+
+        <strong id="paymentChange">
+          Rp 0
+        </strong>
+      </div>
+
+    </div>
+
+
+    <div
+      id="paymentFormMessage"
+      style="
+        margin-bottom:15px;
+      "
+    ></div>
+
+
+    <div style="
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+    ">
+
+      <button
+        type="button"
+        onclick="openPaymentVisit('${escapePaymentValue(kunjunganId)}')"
+        style="
+          border:0;
+          border-radius:8px;
+          padding:10px 18px;
+          cursor:pointer;
+        "
+      >
+        Batal
+      </button>
+
+
+      <button
+        type="button"
+        onclick="savePaymentUI('${escapePaymentValue(kunjunganId)}', ${sisa})"
+        style="
+          border:0;
+          border-radius:8px;
+          padding:10px 18px;
+          cursor:pointer;
+        "
+      >
+        💳 Simpan Pembayaran
+      </button>
+
+    </div>
+
+  `;
+
+}
+
+function calculatePaymentChange() {
+
+  const method =
+    document.getElementById(
+      'paymentMethod'
+    );
+
+  const amount =
+    document.getElementById(
+      'paymentAmount'
+    );
+
+  const change =
+    document.getElementById(
+      'paymentChange'
+    );
+
+  if (!method || !amount || !change) {
+    return;
+  }
+
+
+  const metode =
+    String(
+      method.value || ''
+    ).trim()
+    .toUpperCase();
+
+
+  const jumlah =
+    Number(
+      amount.value || 0
+    );
+
+
+  const sisaText =
+    document.querySelector(
+      '#paymentChangeBox strong'
+    );
+
+
+  let sisa = 0;
+
+  if (sisaText) {
+
+    const text =
+      sisaText.textContent
+        .replace(/[^\d]/g, '');
+
+    sisa =
+      Number(text || 0);
+  }
+
+
+  let kembalian = 0;
+
+
+  if (
+    metode === 'TUNAI' &&
+    jumlah > sisa
+  ) {
+
+    kembalian =
+      jumlah - sisa;
+
+  }
+
+
+  change.textContent =
+    formatPaymentCurrency(
+      kembalian
+    );
+
+}
+
 
 </script>
 
