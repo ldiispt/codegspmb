@@ -1212,19 +1212,19 @@
       </div>
 
       <div
-        class="menu-item"
-        onclick="placeholderPage('Data Obat')"
+       class="menu-item"
+       onclick="showPage('obat', this)"
       >
-        <span class="menu-icon">💊</span>
-        Data Obat
+       <span class="menu-icon">💊</span>
+       Data Obat
       </div>
 
       <div
-        class="menu-item"
-        onclick="placeholderPage('Resep')"
+       class="menu-item"
+       onclick="showPage('resep', this)"
       >
-        <span class="menu-icon">💉</span>
-        Resep
+       <span class="menu-icon">💉</span>
+       Resep
       </div>
 
 
@@ -6603,6 +6603,1147 @@ function printMedicalHistory() {
   setTimeout(function(){ win.print(); }, 400);
 }
 
+/* ============================================================
+ * V1 TAHAP 7
+ * DATA OBAT
+ * ============================================================ */
+
+let currentMedicineId = '';
+
+
+/**
+ * ============================================================
+ * HALAMAN DATA OBAT
+ * ============================================================
+ */
+function loadMedicinePage() {
+
+  document.getElementById(
+    'topbarTitle'
+  ).textContent =
+    'Data Obat';
+
+  document.getElementById(
+    'content'
+  ).innerHTML = `
+
+    <div class="page-header">
+
+      <div>
+
+        <h1 class="page-title">
+          💊 Data Obat
+        </h1>
+
+        <div class="page-description">
+          Kelola data obat, harga, stok dan status obat.
+        </div>
+
+      </div>
+
+      <button
+        class="btn btn-primary"
+        onclick="openMedicineModal()"
+      >
+        + Tambah Obat
+      </button>
+
+    </div>
+
+
+    <div class="card">
+
+      <div class="toolbar">
+
+        <div class="search-box">
+
+          <input
+            id="medicineSearch"
+            class="form-control"
+            placeholder="🔍 Cari kode, nama, kandungan atau lokasi..."
+            oninput="loadMedicines()"
+          >
+
+        </div>
+
+
+        <select
+          id="medicineStatusFilter"
+          class="form-control"
+          style="max-width:180px;"
+          onchange="loadMedicines()"
+        >
+
+          <option value="">
+            Semua Status
+          </option>
+
+          <option value="AKTIF">
+            Aktif
+          </option>
+
+          <option value="NONAKTIF">
+            Nonaktif
+          </option>
+
+        </select>
+
+      </div>
+
+
+      <div id="medicineTableContainer">
+
+        <div class="loading-state">
+          Memuat data obat...
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+  loadMedicines();
+
+}
+
+
+/**
+ * ============================================================
+ * LOAD DATA OBAT
+ * ============================================================
+ */
+function loadMedicines() {
+
+  const searchElement =
+    document.getElementById(
+      'medicineSearch'
+    );
+
+  const statusElement =
+    document.getElementById(
+      'medicineStatusFilter'
+    );
+
+  const search =
+    searchElement
+      ? searchElement.value
+      : '';
+
+  const status =
+    statusElement
+      ? statusElement.value
+      : '';
+
+
+  const container =
+    document.getElementById(
+      'medicineTableContainer'
+    );
+
+  if (!container) {
+    return;
+  }
+
+
+  container.innerHTML = `
+
+    <div class="loading-state">
+      Memuat data obat...
+    </div>
+
+  `;
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        renderMedicineTable(
+          result || {
+            total: 0,
+            data: []
+          }
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      handleServerError
+    )
+
+    .getMedicines(
+      sessionToken,
+      search,
+      status
+    );
+
+}
+
+
+/**
+ * ============================================================
+ * RENDER TABEL OBAT
+ * ============================================================
+ */
+function renderMedicineTable(
+  result
+) {
+
+  const container =
+    document.getElementById(
+      'medicineTableContainer'
+    );
+
+  if (!container) {
+    return;
+  }
+
+
+  const data =
+    result &&
+    Array.isArray(result.data)
+      ? result.data
+      : [];
+
+
+  if (data.length === 0) {
+
+    container.innerHTML = `
+
+      <div class="empty">
+
+        <div class="empty-icon">
+          💊
+        </div>
+
+        <h3>
+          Belum ada data obat
+        </h3>
+
+        <p>
+          Silakan tambahkan data obat baru.
+        </p>
+
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  container.innerHTML = `
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>Kode</th>
+            <th>Nama Obat</th>
+            <th>Kandungan</th>
+            <th>Satuan</th>
+            <th>Harga Jual</th>
+            <th>Stok</th>
+            <th>Lokasi</th>
+            <th>Status</th>
+            <th>Aksi</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${data.map(
+            function(obat) {
+
+              const lowStock =
+                Number(
+                  obat.stok || 0
+                ) <=
+                Number(
+                  obat.stokMinimum || 0
+                );
+
+
+              return `
+
+                <tr>
+
+                  <td>
+                    <strong>
+                      ${escapeHTML(
+                        obat.kodeObat
+                      )}
+                    </strong>
+                  </td>
+
+
+                  <td>
+
+                    <div
+                      class="patient-name"
+                    >
+                      ${escapeHTML(
+                        obat.namaObat
+                      )}
+                    </div>
+
+                    ${
+                      obat.keterangan
+                        ? `
+                          <div
+                            class="muted"
+                            style="font-size:11px;"
+                          >
+                            ${escapeHTML(
+                              obat.keterangan
+                            )}
+                          </div>
+                        `
+                        : ''
+                    }
+
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      obat.kandungan ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      obat.satuan ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+                    ${formatRupiah(
+                      obat.hargaJual
+                    )}
+                  </td>
+
+
+                  <td>
+
+                    <strong
+                      style="
+                        color:${
+                          lowStock
+                            ? '#dc2626'
+                            : '#0f766e'
+                        };
+                      "
+                    >
+                      ${formatNumber(
+                        obat.stok
+                      )}
+                    </strong>
+
+                    ${
+                      lowStock
+                        ? `
+                          <div
+                            style="
+                              font-size:10px;
+                              color:#dc2626;
+                              font-weight:700;
+                            "
+                          >
+                            ⚠ Stok rendah
+                          </div>
+                        `
+                        : ''
+                    }
+
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      obat.lokasi ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+                    ${statusBadge(
+                      obat.status
+                    )}
+                  </td>
+
+
+                  <td>
+
+                    <div
+                      style="
+                        display:flex;
+                        gap:6px;
+                        flex-wrap:wrap;
+                      "
+                    >
+
+                      <button
+                        class="btn btn-secondary"
+                        onclick="editMedicine(
+                          '${escapeAttr(
+                            obat.obatId
+                          )}'
+                        )"
+                      >
+                        ✏️ Edit
+                      </button>
+
+
+                      <button
+                        class="btn ${
+                          String(
+                            obat.status ||
+                            ''
+                          ).toUpperCase() ===
+                          'AKTIF'
+                            ? 'btn-danger'
+                            : 'btn-success'
+                        }"
+                        onclick="toggleMedicineStatus(
+                          '${escapeAttr(
+                            obat.obatId
+                          )}',
+                          '${
+                            String(
+                              obat.status ||
+                              ''
+                            ).toUpperCase() ===
+                            'AKTIF'
+                              ? 'NONAKTIF'
+                              : 'AKTIF'
+                          }'
+                        )"
+                      >
+                        ${
+                          String(
+                            obat.status ||
+                            ''
+                          ).toUpperCase() ===
+                          'AKTIF'
+                            ? 'Nonaktifkan'
+                            : 'Aktifkan'
+                        }
+                      </button>
+
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              `;
+
+            }
+          ).join('')}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+    <div
+      class="muted"
+      style="
+        margin-top:12px;
+        font-size:12px;
+      "
+    >
+      Menampilkan
+      <strong>
+        ${formatNumber(data.length)}
+      </strong>
+      data obat.
+    </div>
+
+  `;
+
+}
+
+
+/**
+ * ============================================================
+ * MODAL OBAT
+ * ============================================================
+ */
+function openMedicineModal(
+  obat
+) {
+
+  currentMedicineId =
+    obat && obat.obatId
+      ? obat.obatId
+      : '';
+
+
+  const isEdit =
+    !!currentMedicineId;
+
+
+  const modal =
+    document.getElementById(
+      'medicineModal'
+    );
+
+  if (modal) {
+    modal.remove();
+  }
+
+
+  document.body.insertAdjacentHTML(
+    'beforeend',
+    `
+
+    <div
+      id="medicineModal"
+      class="modal show"
+    >
+
+      <div
+        class="modal-box"
+        style="max-width:800px;"
+      >
+
+        <div class="modal-header">
+
+          <div class="modal-title">
+
+            ${
+              isEdit
+                ? '✏️ Edit Obat'
+                : '💊 Tambah Obat'
+            }
+
+          </div>
+
+
+          <button
+            class="modal-close"
+            onclick="closeMedicineModal()"
+          >
+            ×
+          </button>
+
+        </div>
+
+
+        <div class="modal-body">
+
+          <form
+            id="medicineForm"
+            onsubmit="
+              saveMedicineForm(event)
+            "
+          >
+
+            <input
+              type="hidden"
+              id="medicineId"
+              value="${escapeAttr(
+                isEdit
+                  ? obat.obatId
+                  : ''
+              )}"
+            >
+
+
+            <div class="form-grid">
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Kode Obat
+                </label>
+
+                <input
+                  id="medicineCode"
+                  class="form-control"
+                  value="${escapeAttr(
+                    isEdit
+                      ? obat.kodeObat
+                      : ''
+                  )}"
+                  placeholder="Kosongkan untuk otomatis"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Nama Obat *
+                </label>
+
+                <input
+                  id="medicineName"
+                  class="form-control"
+                  required
+                  value="${escapeAttr(
+                    isEdit
+                      ? obat.namaObat
+                      : ''
+                  )}"
+                  placeholder="Contoh: Paracetamol"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Kandungan
+                </label>
+
+                <input
+                  id="medicineContent"
+                  class="form-control"
+                  value="${escapeAttr(
+                    isEdit
+                      ? obat.kandungan
+                      : ''
+                  )}"
+                  placeholder="Contoh: Paracetamol 500 mg"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Satuan *
+                </label>
+
+                <input
+                  id="medicineUnit"
+                  class="form-control"
+                  required
+                  value="${escapeAttr(
+                    isEdit
+                      ? obat.satuan
+                      : ''
+                  )}"
+                  placeholder="Tablet / Botol / Strip"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Harga Beli
+                </label>
+
+                <input
+                  id="medicinePurchasePrice"
+                  class="form-control"
+                  type="number"
+                  min="0"
+                  value="${
+                    isEdit
+                      ? Number(
+                          obat.hargaBeli ||
+                          0
+                        )
+                      : 0
+                  }"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Harga Jual
+                </label>
+
+                <input
+                  id="medicineSellingPrice"
+                  class="form-control"
+                  type="number"
+                  min="0"
+                  value="${
+                    isEdit
+                      ? Number(
+                          obat.hargaJual ||
+                          0
+                        )
+                      : 0
+                  }"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Stok
+                </label>
+
+                <input
+                  id="medicineStock"
+                  class="form-control"
+                  type="number"
+                  min="0"
+                  value="${
+                    isEdit
+                      ? Number(
+                          obat.stok ||
+                          0
+                        )
+                      : 0
+                  }"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Stok Minimum
+                </label>
+
+                <input
+                  id="medicineMinimumStock"
+                  class="form-control"
+                  type="number"
+                  min="0"
+                  value="${
+                    isEdit
+                      ? Number(
+                          obat.stokMinimum ||
+                          0
+                        )
+                      : 5
+                  }"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Lokasi
+                </label>
+
+                <input
+                  id="medicineLocation"
+                  class="form-control"
+                  value="${escapeAttr(
+                    isEdit
+                      ? obat.lokasi
+                      : ''
+                  )}"
+                  placeholder="Contoh: Lemari A1"
+                >
+
+              </div>
+
+
+              <div class="form-group">
+
+                <label class="form-label">
+                  Status
+                </label>
+
+                <select
+                  id="medicineStatus"
+                  class="form-control"
+                >
+
+                  <option
+                    value="AKTIF"
+                    ${
+                      !isEdit ||
+                      String(
+                        obat.status ||
+                        ''
+                      ).toUpperCase() ===
+                        'AKTIF'
+                        ? 'selected'
+                        : ''
+                    }
+                  >
+                    Aktif
+                  </option>
+
+                  <option
+                    value="NONAKTIF"
+                    ${
+                      isEdit &&
+                      String(
+                        obat.status ||
+                        ''
+                      ).toUpperCase() ===
+                        'NONAKTIF'
+                        ? 'selected'
+                        : ''
+                    }
+                  >
+                    Nonaktif
+                  </option>
+
+                </select>
+
+              </div>
+
+            </div>
+
+
+            <div class="form-group">
+
+              <label class="form-label">
+                Keterangan
+              </label>
+
+              <textarea
+                id="medicineNote"
+                class="form-control"
+                placeholder="Keterangan tambahan..."
+              >${
+                escapeHTML(
+                  isEdit
+                    ? obat.keterangan
+                    : ''
+                )
+              }</textarea>
+
+            </div>
+
+
+            <div
+              style="
+                display:flex;
+                justify-content:flex-end;
+                gap:10px;
+                margin-top:20px;
+              "
+            >
+
+              <button
+                type="button"
+                class="btn btn-secondary"
+                onclick="closeMedicineModal()"
+              >
+                Batal
+              </button>
+
+
+              <button
+                type="submit"
+                class="btn btn-primary"
+              >
+                💾 Simpan
+              </button>
+
+            </div>
+
+          </form>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    `
+  );
+
+}
+
+
+/**
+ * ============================================================
+ * EDIT OBAT
+ * ============================================================
+ */
+function editMedicine(
+  obatId
+) {
+
+  showLoading(
+    'Memuat data obat...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(obat) {
+
+        hideLoading();
+
+        openMedicineModal(
+          obat
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .getMedicine(
+      sessionToken,
+      obatId
+    );
+
+}
+
+
+/**
+ * ============================================================
+ * SIMPAN FORM OBAT
+ * ============================================================
+ */
+function saveMedicineForm(
+  event
+) {
+
+  event.preventDefault();
+
+
+  const data = {
+
+    obatId:
+      document.getElementById(
+        'medicineId'
+      ).value,
+
+    kodeObat:
+      document.getElementById(
+        'medicineCode'
+      ).value,
+
+    namaObat:
+      document.getElementById(
+        'medicineName'
+      ).value,
+
+    kandungan:
+      document.getElementById(
+        'medicineContent'
+      ).value,
+
+    satuan:
+      document.getElementById(
+        'medicineUnit'
+      ).value,
+
+    hargaBeli:
+      document.getElementById(
+        'medicinePurchasePrice'
+      ).value,
+
+    hargaJual:
+      document.getElementById(
+        'medicineSellingPrice'
+      ).value,
+
+    stok:
+      document.getElementById(
+        'medicineStock'
+      ).value,
+
+    stokMinimum:
+      document.getElementById(
+        'medicineMinimumStock'
+      ).value,
+
+    lokasi:
+      document.getElementById(
+        'medicineLocation'
+      ).value,
+
+    status:
+      document.getElementById(
+        'medicineStatus'
+      ).value,
+
+    keterangan:
+      document.getElementById(
+        'medicineNote'
+      ).value
+
+  };
+
+
+  showLoading(
+    'Menyimpan data obat...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        hideLoading();
+
+        closeMedicineModal();
+
+        showToast(
+          result &&
+          result.message
+            ? result.message
+            : 'Data obat berhasil disimpan.'
+        );
+
+        loadMedicines();
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .saveMedicine(
+      sessionToken,
+      data
+    );
+
+}
+
+
+/**
+ * ============================================================
+ * TUTUP MODAL OBAT
+ * ============================================================
+ */
+function closeMedicineModal() {
+
+  const modal =
+    document.getElementById(
+      'medicineModal'
+    );
+
+  if (modal) {
+    modal.remove();
+  }
+
+}
+
+
+/**
+ * ============================================================
+ * AKTIF / NONAKTIF OBAT
+ * ============================================================
+ */
+function toggleMedicineStatus(
+  obatId,
+  newStatus
+) {
+
+  const action =
+    newStatus === 'AKTIF'
+      ? 'mengaktifkan'
+      : 'menonaktifkan';
+
+
+  if (
+    !confirm(
+      'Apakah Anda yakin ingin ' +
+      action +
+      ' obat ini?'
+    )
+  ) {
+
+    return;
+
+  }
+
+
+  showLoading(
+    'Memperbarui status obat...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        hideLoading();
+
+        showToast(
+          result &&
+          result.message
+            ? result.message
+            : 'Status obat berhasil diubah.'
+        );
+
+        loadMedicines();
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .updateMedicineStatus(
+      sessionToken,
+      obatId,
+      newStatus
+    );
+
+}
+
 /* Final navigation layer: mengaktifkan Pemeriksaan dan Rekam Medis. */
 (function installFinalNavigation(){
   const old = window.showPage;
@@ -6617,9 +7758,2899 @@ function printMedicalHistory() {
     if (page === 'antrian') { document.getElementById('topbarTitle').textContent='Antrian'; loadQueuePage(); return; }
     if (page === 'pemeriksaan') { document.getElementById('topbarTitle').textContent='Pemeriksaan'; loadExaminationPage(); return; }
     if (page === 'rekam-medis') { document.getElementById('topbarTitle').textContent='Rekam Medis'; loadMedicalRecordPage(); return; }
-    placeholderPage(page);
+    if (page === 'obat') { document.getElementById('topbarTitle').textContent='Data Obat'; loadMedicinePage
+    (); return; }
+    if (page === 'resep') { document.getElementById('topbarTitle').textContent='Resep'; loadPrescriptionPage
+    ();return; }
+
+  placeholderPage(page);
   };
 })();
+
+/* ============================================================
+ * V1 TAHAP 8C
+ * FARMASI — RESEP
+ *
+ * Tidak mengubah:
+ * Dashboard
+ * Data Pasien
+ * Pendaftaran
+ * Antrian
+ * Pemeriksaan
+ * Rekam Medis
+ * Data Obat
+ * ============================================================ */
+
+let prescriptionRows = [];
+
+let prescriptionItems = [];
+
+let currentPrescriptionId = '';
+
+
+/* ============================================================
+ * HALAMAN RESEP
+ * ============================================================ */
+
+function loadPrescriptionPage() {
+
+  document.getElementById(
+    'topbarTitle'
+  ).textContent =
+    'Resep';
+
+
+  document.getElementById(
+    'content'
+  ).innerHTML = `
+
+    <div class="page-header">
+
+      <div>
+
+        <h1 class="page-title">
+          💉 Resep
+        </h1>
+
+        <div class="page-description">
+          Kelola resep pasien dan obat yang diresepkan.
+        </div>
+
+      </div>
+
+
+      <button
+        class="btn btn-primary"
+        onclick="openPrescriptionForm()"
+      >
+        + Buat Resep
+      </button>
+
+    </div>
+
+
+    <div class="card">
+
+      <div class="toolbar">
+
+        <div class="search-box">
+
+          <input
+            id="prescriptionSearch"
+            class="form-control"
+            placeholder="🔍 Cari resep, pasien, No. RM..."
+            oninput="loadPrescriptions()"
+          >
+
+        </div>
+
+
+        <select
+          id="prescriptionStatus"
+          class="form-control"
+          style="max-width:190px;"
+          onchange="loadPrescriptions()"
+        >
+
+          <option value="">
+            Semua Status
+          </option>
+
+          <option value="MENUNGGU">
+            Menunggu
+          </option>
+
+          <option value="DIPROSES">
+            Diproses
+          </option>
+
+          <option value="SELESAI">
+            Selesai
+          </option>
+
+          <option value="BATAL">
+            Batal
+          </option>
+
+        </select>
+
+      </div>
+
+
+      <div id="prescriptionTable">
+
+        <div class="loading-state">
+          Memuat data resep...
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  loadPrescriptions();
+
+}
+
+
+/* ============================================================
+ * LOAD RESEP
+ * ============================================================ */
+
+function loadPrescriptions() {
+
+  const container =
+    document.getElementById(
+      'prescriptionTable'
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  const searchElement =
+    document.getElementById(
+      'prescriptionSearch'
+    );
+
+
+  const statusElement =
+    document.getElementById(
+      'prescriptionStatus'
+    );
+
+
+  const search =
+    searchElement
+      ? searchElement.value
+      : '';
+
+
+  const status =
+    statusElement
+      ? statusElement.value
+      : '';
+
+
+  container.innerHTML = `
+
+    <div class="loading-state">
+      Memuat data resep...
+    </div>
+
+  `;
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        renderPrescriptionTable(
+          result || {
+            total: 0,
+            data: []
+          }
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      handleServerError
+    )
+
+    .getPrescriptions(
+      sessionToken,
+      search,
+      status
+    );
+
+}
+
+
+/* ============================================================
+ * RENDER DAFTAR RESEP
+ * ============================================================ */
+
+function renderPrescriptionTable(
+  result
+) {
+
+  const container =
+    document.getElementById(
+      'prescriptionTable'
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  const data =
+    result &&
+    Array.isArray(result.data)
+      ? result.data
+      : [];
+
+
+  prescriptionRows =
+    data;
+
+
+  if (data.length === 0) {
+
+    container.innerHTML = `
+
+      <div class="empty">
+
+        <div class="empty-icon">
+          💉
+        </div>
+
+        <h3>
+          Belum ada resep
+        </h3>
+
+        <p>
+          Belum terdapat data resep pasien.
+        </p>
+
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  container.innerHTML = `
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>Tanggal</th>
+            <th>Resep</th>
+            <th>No. RM</th>
+            <th>Pasien</th>
+            <th>Obat</th>
+            <th>Pemeriksa</th>
+            <th>Status</th>
+            <th>Aksi</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${data.map(
+            function(resep) {
+
+              return `
+
+                <tr>
+
+                  <td>
+                    ${escapeHTML(
+                      resep.tanggal ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+
+                    <strong>
+                      ${escapeHTML(
+                        resep.resepId
+                      )}
+                    </strong>
+
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      resep.noRM ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+
+                    <strong>
+                      ${escapeHTML(
+                        resep.namaPasien ||
+                        '-'
+                      )}
+                    </strong>
+
+                  </td>
+
+
+                  <td>
+
+                    <strong>
+                      ${
+                        Number(
+                          resep.jumlahJenisObat ||
+                          0
+                        )
+                      }
+                    </strong>
+
+                    jenis
+
+                    <div
+                      class="muted"
+                      style="font-size:11px;"
+                    >
+                      ${
+                        Number(
+                          resep.totalItem ||
+                          0
+                        )
+                      }
+                      item
+                    </div>
+
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      resep.dokterBidan ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+                    ${prescriptionStatusBadge(
+                      resep.status
+                    )}
+                  </td>
+
+
+                  <td>
+
+                    <button
+                      class="btn btn-secondary"
+                      onclick="viewPrescription(
+                        '${escapeAttr(
+                          resep.resepId
+                        )}'
+                      )"
+                    >
+                      👁 Detail
+                    </button>
+
+                  </td>
+
+                </tr>
+
+              `;
+
+            }
+          ).join('')}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+
+    <div
+      class="muted"
+      style="
+        margin-top:12px;
+        font-size:12px;
+      "
+    >
+
+      Menampilkan
+      <strong>
+        ${formatNumber(
+          data.length
+        )}
+      </strong>
+      resep.
+
+    </div>
+
+  `;
+
+}
+
+
+/* ============================================================
+ * STATUS BADGE RESEP
+ * ============================================================ */
+
+function prescriptionStatusBadge(
+  status
+) {
+
+  const value =
+    String(
+      status || ''
+    )
+      .trim()
+      .toUpperCase();
+
+
+  let label =
+    value || '-';
+
+
+  if (
+    value === 'MENUNGGU'
+  ) {
+
+    return `
+      <span
+        class="badge badge-warning"
+      >
+        MENUNGGU
+      </span>
+    `;
+
+  }
+
+
+  if (
+    value === 'DIPROSES'
+  ) {
+
+    return `
+      <span
+        class="badge badge-info"
+      >
+        DIPROSES
+      </span>
+    `;
+
+  }
+
+
+  if (
+    value === 'SELESAI'
+  ) {
+
+    return `
+      <span
+        class="badge badge-success"
+      >
+        SELESAI
+      </span>
+    `;
+
+  }
+
+
+  if (
+    value === 'BATAL'
+  ) {
+
+    return `
+      <span
+        class="badge badge-danger"
+      >
+        BATAL
+      </span>
+    `;
+
+  }
+
+
+  return `
+    <span class="badge">
+      ${escapeHTML(label)}
+    </span>
+  `;
+
+}
+
+
+/* ============================================================
+ * FORM BUAT RESEP
+ * ============================================================ */
+
+function openPrescriptionForm() {
+
+  prescriptionItems = [];
+
+
+  const oldModal =
+    document.getElementById(
+      'prescriptionModal'
+    );
+
+
+  if (oldModal) {
+    oldModal.remove();
+  }
+
+
+  document.body.insertAdjacentHTML(
+    'beforeend',
+    `
+
+    <div
+      id="prescriptionModal"
+      class="modal show"
+    >
+
+      <div
+        class="modal-box"
+        style="
+          max-width:1050px;
+          max-height:90vh;
+          overflow:auto;
+        "
+      >
+
+        <div class="modal-header">
+
+          <div class="modal-title">
+            💉 Buat Resep
+          </div>
+
+
+          <button
+            class="modal-close"
+            onclick="closePrescriptionModal()"
+          >
+            ×
+          </button>
+
+        </div>
+
+
+        <div class="modal-body">
+
+
+          <!-- =========================================
+               KUNJUNGAN
+               ========================================= -->
+
+          <div class="card">
+
+            <div
+              style="
+                font-weight:700;
+                margin-bottom:14px;
+              "
+            >
+              1. Pilih Kunjungan
+            </div>
+
+
+            <div
+              id="prescriptionVisitArea"
+            >
+
+              <div class="loading-state">
+                Memuat kunjungan...
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- =========================================
+               DATA PASIEN
+               ========================================= -->
+
+          <div
+            id="prescriptionPatientArea"
+            style="display:none;"
+          >
+
+            <div class="card">
+
+              <div
+                style="
+                  font-weight:700;
+                  margin-bottom:14px;
+                "
+              >
+                2. Data Pasien
+              </div>
+
+
+              <div
+                class="form-grid"
+              >
+
+                <div class="form-group">
+
+                  <label class="form-label">
+                    No. RM
+                  </label>
+
+                  <input
+                    id="prescriptionNoRM"
+                    class="form-control"
+                    readonly
+                  >
+
+                </div>
+
+
+                <div class="form-group">
+
+                  <label class="form-label">
+                    Nama Pasien
+                  </label>
+
+                  <input
+                    id="prescriptionPatientName"
+                    class="form-control"
+                    readonly
+                  >
+
+                </div>
+
+
+                <div class="form-group">
+
+                  <label class="form-label">
+                    Kunjungan
+                  </label>
+
+                  <input
+                    id="prescriptionVisitId"
+                    class="form-control"
+                    readonly
+                  >
+
+                </div>
+
+
+                <div class="form-group">
+
+                  <label class="form-label">
+                    Pemeriksa
+                  </label>
+
+                  <input
+                    id="prescriptionDoctor"
+                    class="form-control"
+                    value=""
+                    placeholder="Nama bidan/pemeriksa"
+                  >
+
+                </div>
+
+              </div>
+
+
+              <div
+                id="prescriptionVisitInfo"
+                class="muted"
+                style="margin-top:8px;"
+              ></div>
+
+            </div>
+
+
+            <!-- =======================================
+                 OBAT
+                 ======================================= -->
+
+            <div class="card">
+
+              <div
+                style="
+                  display:flex;
+                  justify-content:space-between;
+                  align-items:center;
+                  gap:10px;
+                  margin-bottom:14px;
+                "
+              >
+
+                <div
+                  style="
+                    font-weight:700;
+                  "
+                >
+                  3. Daftar Obat
+                </div>
+
+
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  onclick="addPrescriptionMedicine()"
+                >
+                  + Tambah Obat
+                </button>
+
+              </div>
+
+
+              <div
+                id="prescriptionMedicineList"
+              >
+
+                <div class="empty">
+
+                  <div class="empty-icon">
+                    💊
+                  </div>
+
+                  <p>
+                    Belum ada obat.
+                  </p>
+
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    onclick="addPrescriptionMedicine()"
+                  >
+                    + Pilih Obat
+                  </button>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <!-- =======================================
+                 CATATAN
+                 ======================================= -->
+
+            <div class="card">
+
+              <div
+                style="
+                  font-weight:700;
+                  margin-bottom:14px;
+                "
+              >
+                4. Catatan Resep
+              </div>
+
+
+              <textarea
+                id="prescriptionNote"
+                class="form-control"
+                rows="3"
+                placeholder="Catatan tambahan untuk farmasi..."
+              ></textarea>
+
+            </div>
+
+
+            <!-- =======================================
+                 SIMPAN
+                 ======================================= -->
+
+            <div
+              style="
+                display:flex;
+                justify-content:flex-end;
+                gap:10px;
+              "
+            >
+
+              <button
+                type="button"
+                class="btn btn-secondary"
+                onclick="closePrescriptionModal()"
+              >
+                Batal
+              </button>
+
+
+              <button
+                type="button"
+                class="btn btn-primary"
+                onclick="savePrescriptionForm()"
+              >
+                💾 Simpan Resep
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    `
+  );
+
+
+  loadPrescriptionVisits();
+
+}
+
+
+/* ============================================================
+ * LOAD KUNJUNGAN YANG DAPAT DIBERI RESEP
+ * ============================================================ */
+
+function loadPrescriptionVisits() {
+
+  const area =
+    document.getElementById(
+      'prescriptionVisitArea'
+    );
+
+
+  if (!area) {
+    return;
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        renderPrescriptionVisits(
+          result || {
+            total: 0,
+            data: []
+          }
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      handleServerError
+    )
+
+    .getPatientsForPrescription(
+      sessionToken
+    );
+
+}
+
+
+/* ============================================================
+ * RENDER KUNJUNGAN
+ * ============================================================ */
+
+function renderPrescriptionVisits(
+  result
+) {
+
+  const area =
+    document.getElementById(
+      'prescriptionVisitArea'
+    );
+
+
+  if (!area) {
+    return;
+  }
+
+
+  const data =
+    result &&
+    Array.isArray(result.data)
+      ? result.data
+      : [];
+
+
+  if (data.length === 0) {
+
+    area.innerHTML = `
+
+      <div class="empty">
+
+        <div class="empty-icon">
+          🩺
+        </div>
+
+        <h3>
+          Tidak ada kunjungan
+        </h3>
+
+        <p>
+          Belum ada pasien dengan status
+          <strong>DILAYANI</strong>
+          yang dapat dibuatkan resep.
+        </p>
+
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  area.innerHTML = `
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>NO. RM</th>
+            <th>Nama Pasien</th>
+            <th>Tanggal</th>
+            <th>Pelayanan</th>
+            <th>Pemeriksa</th>
+            <th>Aksi</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${data.map(
+            function(item) {
+
+              return `
+
+                <tr>
+
+                  <td>
+                    <strong>
+                      ${escapeHTML(
+                        item.noRM
+                      )}
+                    </strong>
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      item.namaPasien
+                    )}
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      item.tanggal ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      item.jenisKunjungan ||
+                      item.poli ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+                    ${escapeHTML(
+                      item.dokterBidan ||
+                      '-'
+                    )}
+                  </td>
+
+
+                  <td>
+
+                    <button
+                      type="button"
+                      class="btn btn-primary"
+                      onclick="selectPrescriptionVisit(
+                        '${escapeAttr(
+                          item.kunjunganId
+                        )}'
+                      )"
+                    >
+                      Pilih
+                    </button>
+
+                  </td>
+
+                </tr>
+
+              `;
+
+            }
+          ).join('')}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+
+}
+
+
+/* ============================================================
+ * PILIH KUNJUNGAN
+ * ============================================================ */
+
+function selectPrescriptionVisit(
+  kunjunganId
+) {
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        /*
+         * Backend mengembalikan daftar.
+         * Cari KUNJUNGAN_ID yang dipilih.
+         */
+
+        const data =
+          result &&
+          Array.isArray(result.data)
+            ? result.data
+            : [];
+
+
+        const selected =
+          data.find(
+            function(item) {
+
+              return (
+                String(
+                  item.kunjunganId
+                ) ===
+                String(
+                  kunjunganId
+                )
+              );
+
+            }
+          );
+
+
+        if (!selected) {
+
+          showToast(
+            'Kunjungan tidak ditemukan.'
+          );
+
+          return;
+
+        }
+
+
+        setPrescriptionVisit(
+          selected
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      handleServerError
+    )
+
+    .getPatientsForPrescription(
+      sessionToken
+    );
+
+}
+
+
+/* ============================================================
+ * SET KUNJUNGAN TERPILIH
+ * ============================================================ */
+
+function setPrescriptionVisit(
+  visit
+) {
+
+  const patientArea =
+    document.getElementById(
+      'prescriptionPatientArea'
+    );
+
+
+  if (!patientArea) {
+    return;
+  }
+
+
+  document.getElementById(
+    'prescriptionNoRM'
+  ).value =
+    visit.noRM || '';
+
+
+  document.getElementById(
+    'prescriptionPatientName'
+  ).value =
+    visit.namaPasien || '';
+
+
+  document.getElementById(
+    'prescriptionVisitId'
+  ).value =
+    visit.kunjunganId || '';
+
+
+  document.getElementById(
+    'prescriptionDoctor'
+  ).value =
+    visit.dokterBidan || '';
+
+
+  document.getElementById(
+    'prescriptionVisitInfo'
+  ).innerHTML = `
+
+    Jenis kunjungan:
+    <strong>
+      ${escapeHTML(
+        visit.jenisKunjungan ||
+        '-'
+      )}
+    </strong>
+
+    &nbsp; | &nbsp;
+
+    Keluhan:
+    <strong>
+      ${escapeHTML(
+        visit.keluhan ||
+        '-'
+      )}
+    </strong>
+
+  `;
+
+
+  patientArea.style.display =
+    'block';
+
+
+  const visitArea =
+    document.getElementById(
+      'prescriptionVisitArea'
+    );
+
+
+  if (visitArea) {
+
+    visitArea.innerHTML = `
+
+      <div
+        style="
+          padding:14px;
+          border-radius:10px;
+          background:#f0fdf4;
+          border:1px solid #bbf7d0;
+        "
+      >
+
+        <strong>
+          ✓ Kunjungan dipilih
+        </strong>
+
+        <div
+          style="
+            margin-top:5px;
+            font-size:13px;
+          "
+        >
+
+          ${escapeHTML(
+            visit.noRM
+          )}
+
+          —
+          
+          ${escapeHTML(
+            visit.namaPasien
+          )}
+
+        </div>
+
+
+        <button
+          type="button"
+          class="btn btn-secondary"
+          style="margin-top:10px;"
+          onclick="changePrescriptionVisit()"
+        >
+          Ganti Kunjungan
+        </button>
+
+      </div>
+
+    `;
+
+  }
+
+}
+
+
+/* ============================================================
+ * GANTI KUNJUNGAN
+ * ============================================================ */
+
+function changePrescriptionVisit() {
+
+  prescriptionItems = [];
+
+  renderPrescriptionMedicineList();
+
+
+  const patientArea =
+    document.getElementById(
+      'prescriptionPatientArea'
+    );
+
+
+  if (patientArea) {
+
+    patientArea.style.display =
+      'none';
+
+  }
+
+
+  loadPrescriptionVisits();
+
+}
+
+
+/* ============================================================
+ * TAMBAH OBAT
+ * ============================================================ */
+
+function addPrescriptionMedicine() {
+
+  const itemId =
+    'medicine_' +
+    Date.now() +
+    '_' +
+    Math.random()
+      .toString(36)
+      .substring(2, 8);
+
+
+  prescriptionItems.push({
+
+    itemId:
+      itemId,
+
+    obatId:
+      '',
+
+    kodeObat:
+      '',
+
+    namaObat:
+      '',
+
+    satuan:
+      '',
+
+    harga:
+      0,
+
+    stok:
+      0,
+
+    jumlah:
+      1,
+
+    dosis:
+      '',
+
+    aturanPakai:
+      '',
+
+    catatan:
+      ''
+
+  });
+
+
+  renderPrescriptionMedicineList();
+
+}
+
+
+/* ============================================================
+ * LOAD OBAT UNTUK BARIS RESEP
+ * ============================================================ */
+
+function loadPrescriptionMedicineOptions(
+  itemId,
+  search
+) {
+
+  const select =
+    document.getElementById(
+      'medicineSelect_' +
+      itemId
+    );
+
+
+  if (!select) {
+    return;
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        const data =
+          result &&
+          Array.isArray(result.data)
+            ? result.data
+            : [];
+
+
+        select.innerHTML = `
+
+          <option value="">
+            Pilih obat...
+          </option>
+
+          ${data.map(
+            function(obat) {
+
+              return `
+
+                <option
+                  value="${escapeAttr(
+                    obat.obatId
+                  )}"
+                >
+
+                  ${escapeHTML(
+                    obat.kodeObat
+                  )}
+                  —
+                  ${escapeHTML(
+                    obat.namaObat
+                  )}
+                  —
+                  stok:
+                  ${formatNumber(
+                    obat.stok
+                  )}
+
+                </option>
+
+              `;
+
+            }
+          ).join('')}
+
+        `;
+
+      }
+    )
+
+    .withFailureHandler(
+      handleServerError
+    )
+
+    .getMedicinesForPrescription(
+      sessionToken,
+      search || ''
+    );
+
+}
+
+
+/* ============================================================
+ * RENDER BARIS OBAT
+ * ============================================================ */
+
+function renderPrescriptionMedicineList() {
+
+  const container =
+    document.getElementById(
+      'prescriptionMedicineList'
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  if (
+    prescriptionItems.length === 0
+  ) {
+
+    container.innerHTML = `
+
+      <div class="empty">
+
+        <div class="empty-icon">
+          💊
+        </div>
+
+        <p>
+          Belum ada obat.
+        </p>
+
+        <button
+          type="button"
+          class="btn btn-secondary"
+          onclick="addPrescriptionMedicine()"
+        >
+          + Pilih Obat
+        </button>
+
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  container.innerHTML = `
+
+    <div
+      style="
+        display:flex;
+        flex-direction:column;
+        gap:14px;
+      "
+    >
+
+      ${prescriptionItems.map(
+        function(item, index) {
+
+          return `
+
+            <div
+              style="
+                border:1px solid #e5e7eb;
+                border-radius:12px;
+                padding:15px;
+                background:#fff;
+              "
+            >
+
+              <div
+                style="
+                  display:flex;
+                  justify-content:space-between;
+                  align-items:center;
+                  margin-bottom:12px;
+                "
+              >
+
+                <strong>
+                  Obat #${index + 1}
+                </strong>
+
+
+                <button
+                  type="button"
+                  class="btn btn-danger"
+                  onclick="removePrescriptionMedicine(
+                    '${escapeAttr(
+                      item.itemId
+                    )}'
+                  )"
+                >
+                  🗑 Hapus
+                </button>
+
+              </div>
+
+
+              <div
+                class="form-grid"
+              >
+
+
+                <!-- OBAT -->
+
+                <div
+                  class="form-group"
+                  style="
+                    grid-column:1/-1;
+                  "
+                >
+
+                  <label class="form-label">
+                    Obat *
+                  </label>
+
+
+                  <select
+                    id="medicineSelect_${escapeAttr(
+                      item.itemId
+                    )}"
+                    class="form-control"
+                    onchange="
+                      selectPrescriptionMedicine(
+                        '${escapeAttr(
+                          item.itemId
+                        )}',
+                        this.value
+                      )
+                    "
+                  >
+
+                    <option value="">
+                      Pilih obat...
+                    </option>
+
+                  </select>
+
+
+                  <div
+                    id="medicineStock_${escapeAttr(
+                      item.itemId
+                    )}"
+                    class="muted"
+                    style="
+                      margin-top:5px;
+                      font-size:11px;
+                    "
+                  ></div>
+
+                </div>
+
+
+                <!-- JUMLAH -->
+
+                <div class="form-group">
+
+                  <label class="form-label">
+                    Jumlah *
+                  </label>
+
+                  <input
+                    id="medicineQty_${escapeAttr(
+                      item.itemId
+                    )}"
+                    class="form-control"
+                    type="number"
+                    min="1"
+                    value="${Number(
+                      item.jumlah || 1
+                    )}"
+                    onchange="
+                      updatePrescriptionItemField(
+                        '${escapeAttr(
+                          item.itemId
+                        )}',
+                        'jumlah',
+                        this.value
+                      )
+                    "
+                  >
+
+                </div>
+
+
+                <!-- DOSIS -->
+
+                <div class="form-group">
+
+                  <label class="form-label">
+                    Dosis
+                  </label>
+
+                  <input
+                    id="medicineDose_${escapeAttr(
+                      item.itemId
+                    )}"
+                    class="form-control"
+                    value="${escapeAttr(
+                      item.dosis || ''
+                    )}"
+                    placeholder="Contoh: 500 mg"
+                    onchange="
+                      updatePrescriptionItemField(
+                        '${escapeAttr(
+                          item.itemId
+                        )}',
+                        'dosis',
+                        this.value
+                      )
+                    "
+                  >
+
+                </div>
+
+
+                <!-- ATURAN -->
+
+                <div class="form-group">
+
+                  <label class="form-label">
+                    Aturan Pakai
+                  </label>
+
+                  <input
+                    id="medicineRule_${escapeAttr(
+                      item.itemId
+                    )}"
+                    class="form-control"
+                    value="${escapeAttr(
+                      item.aturanPakai || ''
+                    )}"
+                    placeholder="Contoh: 3 × 1 sehari"
+                    onchange="
+                      updatePrescriptionItemField(
+                        '${escapeAttr(
+                          item.itemId
+                        )}',
+                        'aturanPakai',
+                        this.value
+                      )
+                    "
+                  >
+
+                </div>
+
+
+                <!-- CATATAN -->
+
+                <div class="form-group">
+
+                  <label class="form-label">
+                    Catatan
+                  </label>
+
+                  <input
+                    id="medicineNote_${escapeAttr(
+                      item.itemId
+                    )}"
+                    class="form-control"
+                    value="${escapeAttr(
+                      item.catatan || ''
+                    )}"
+                    placeholder="Catatan obat"
+                    onchange="
+                      updatePrescriptionItemField(
+                        '${escapeAttr(
+                          item.itemId
+                        )}',
+                        'catatan',
+                        this.value
+                      )
+                    "
+                  >
+
+                </div>
+
+
+              </div>
+
+
+              <div
+                style="
+                  margin-top:10px;
+                  text-align:right;
+                  font-size:13px;
+                "
+              >
+
+                Harga:
+
+                <strong>
+                  ${formatRupiah(
+                    item.harga || 0
+                  )}
+                </strong>
+
+                &nbsp; × &nbsp;
+
+                <strong>
+                  ${formatNumber(
+                    item.jumlah || 0
+                  )}
+                </strong>
+
+                &nbsp; = &nbsp;
+
+                <strong>
+                  ${formatRupiah(
+                    (
+                      Number(
+                        item.harga || 0
+                      ) *
+                      Number(
+                        item.jumlah || 0
+                      )
+                    )
+                  )}
+                </strong>
+
+              </div>
+
+            </div>
+
+          `;
+
+        }
+      ).join('')}
+
+    </div>
+
+  `;
+
+
+  /*
+   * Setelah HTML dibuat,
+   * isi pilihan obat dari server.
+   */
+
+  prescriptionItems.forEach(
+    function(item) {
+
+      loadPrescriptionMedicineOptions(
+        item.itemId,
+        ''
+      );
+
+    }
+  );
+
+}
+
+
+/* ============================================================
+ * PILIH OBAT
+ * ============================================================ */
+
+function selectPrescriptionMedicine(
+  itemId,
+  obatId
+) {
+
+  const item =
+    prescriptionItems.find(
+      function(row) {
+        return row.itemId === itemId;
+      }
+    );
+
+
+  if (!item) {
+    return;
+  }
+
+
+  if (!obatId) {
+
+    item.obatId = '';
+    item.kodeObat = '';
+    item.namaObat = '';
+    item.satuan = '';
+    item.harga = 0;
+    item.stok = 0;
+
+    renderPrescriptionMedicineList();
+
+    return;
+
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        const data =
+          result &&
+          Array.isArray(result.data)
+            ? result.data
+            : [];
+
+
+        const obat =
+          data.find(
+            function(row) {
+
+              return (
+                String(
+                  row.obatId
+                ) ===
+                String(
+                  obatId
+                )
+              );
+
+            }
+          );
+
+
+        if (!obat) {
+
+          showToast(
+            'Data obat tidak ditemukan.'
+          );
+
+          return;
+
+        }
+
+
+        item.obatId =
+          obat.obatId;
+
+        item.kodeObat =
+          obat.kodeObat;
+
+        item.namaObat =
+          obat.namaObat;
+
+        item.satuan =
+          obat.satuan;
+
+        item.harga =
+          Number(
+            obat.harga || 0
+          );
+
+        item.stok =
+          Number(
+            obat.stok || 0
+          );
+
+
+        /*
+         * Jangan render seluruh form.
+         *
+         * Cukup perbarui informasi stok.
+         */
+
+        const stockElement =
+          document.getElementById(
+            'medicineStock_' +
+            item.itemId
+          );
+
+
+        if (stockElement) {
+
+          stockElement.innerHTML = `
+
+            Stok tersedia:
+            <strong>
+              ${formatNumber(
+                item.stok
+              )}
+            </strong>
+            ${escapeHTML(
+              item.satuan || ''
+            )}
+
+            &nbsp; | &nbsp;
+
+            Harga:
+            <strong>
+              ${formatRupiah(
+                item.harga
+              )}
+            </strong>
+
+          `;
+
+        }
+
+
+        /*
+         * Perbarui subtotal
+         */
+
+        const quantityElement =
+          document.getElementById(
+            'medicineQty_' +
+            item.itemId
+          );
+
+
+        if (quantityElement) {
+
+          quantityElement.value =
+            item.jumlah || 1;
+
+        }
+
+      }
+    )
+
+    .withFailureHandler(
+      handleServerError
+    )
+
+    .getMedicinesForPrescription(
+      sessionToken,
+      ''
+    );
+
+}
+
+
+/* ============================================================
+ * UPDATE FIELD OBAT
+ * ============================================================ */
+
+function updatePrescriptionItemField(
+  itemId,
+  field,
+  value
+) {
+
+  const item =
+    prescriptionItems.find(
+      function(row) {
+
+        return (
+          row.itemId ===
+          itemId
+        );
+
+      }
+    );
+
+
+  if (!item) {
+    return;
+  }
+
+
+  if (
+    field === 'jumlah'
+  ) {
+
+    item.jumlah =
+      Math.max(
+        1,
+        Number(
+          value || 1
+        )
+      );
+
+  } else {
+
+    item[field] =
+      String(
+        value || ''
+      );
+
+  }
+
+
+  /*
+   * Jangan render ulang di sini.
+   * Agar fokus input tidak hilang.
+   */
+
+}
+
+
+/* ============================================================
+ * HAPUS OBAT
+ * ============================================================ */
+
+function removePrescriptionMedicine(
+  itemId
+) {
+
+  prescriptionItems =
+    prescriptionItems.filter(
+      function(item) {
+
+        return (
+          item.itemId !==
+          itemId
+        );
+
+      }
+    );
+
+
+  renderPrescriptionMedicineList();
+
+}
+
+
+/* ============================================================
+ * SIMPAN RESEP
+ * ============================================================ */
+
+function savePrescriptionForm() {
+
+  const kunjunganId =
+    document.getElementById(
+      'prescriptionVisitId'
+    );
+
+
+  const noRM =
+    document.getElementById(
+      'prescriptionNoRM'
+    );
+
+
+  const doctor =
+    document.getElementById(
+      'prescriptionDoctor'
+    );
+
+
+  const note =
+    document.getElementById(
+      'prescriptionNote'
+    );
+
+
+  if (
+    !kunjunganId ||
+    !kunjunganId.value
+  ) {
+
+    showToast(
+      'Silakan pilih kunjungan terlebih dahulu.'
+    );
+
+    return;
+
+  }
+
+
+  if (
+    prescriptionItems.length === 0
+  ) {
+
+    showToast(
+      'Silakan tambahkan minimal satu obat.'
+    );
+
+    return;
+
+  }
+
+
+  /*
+   * Pastikan semua item memiliki obat.
+   */
+
+  for (
+    let i = 0;
+    i < prescriptionItems.length;
+    i++
+  ) {
+
+    const item =
+      prescriptionItems[i];
+
+
+    if (!item.obatId) {
+
+      showToast(
+        'Obat pada baris ' +
+        (i + 1) +
+        ' belum dipilih.'
+      );
+
+      return;
+
+    }
+
+
+    const jumlah =
+      Number(
+        item.jumlah || 0
+      );
+
+
+    if (
+      jumlah <= 0
+    ) {
+
+      showToast(
+        'Jumlah obat pada baris ' +
+        (i + 1) +
+        ' tidak valid.'
+      );
+
+      return;
+
+    }
+
+
+    if (
+      item.stok &&
+      jumlah > item.stok
+    ) {
+
+      showToast(
+        'Jumlah ' +
+        item.namaObat +
+        ' melebihi stok tersedia.'
+      );
+
+      return;
+
+    }
+
+  }
+
+
+  const data = {
+
+    kunjunganId:
+      kunjunganId.value,
+
+    pasienId:
+      '',
+
+    noRM:
+      noRM
+        ? noRM.value
+        : '',
+
+    dokterBidan:
+      doctor
+        ? doctor.value
+        : '',
+
+    catatan:
+      note
+        ? note.value
+        : '',
+
+    details:
+      prescriptionItems.map(
+        function(item) {
+
+          return {
+
+            obatId:
+              item.obatId,
+
+            jumlah:
+              Number(
+                item.jumlah || 0
+              ),
+
+            dosis:
+              item.dosis || '',
+
+            aturanPakai:
+              item.aturanPakai || '',
+
+            catatan:
+              item.catatan || ''
+
+          };
+
+        }
+      )
+
+  };
+
+
+  showLoading(
+    'Menyimpan resep...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        hideLoading();
+
+        closePrescriptionModal();
+
+
+        showToast(
+          result &&
+          result.message
+            ? result.message
+            : 'Resep berhasil dibuat.'
+        );
+
+
+        loadPrescriptions();
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .savePrescription(
+      sessionToken,
+      data
+    );
+
+}
+
+
+/* ============================================================
+ * DETAIL RESEP
+ * ============================================================ */
+
+function viewPrescription(
+  resepId
+) {
+
+  showLoading(
+    'Memuat detail resep...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(resep) {
+
+        hideLoading();
+
+        renderPrescriptionDetail(
+          resep
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .getPrescription(
+      sessionToken,
+      resepId
+    );
+
+}
+
+
+/* ============================================================
+ * RENDER DETAIL RESEP
+ * ============================================================ */
+
+function renderPrescriptionDetail(
+  resep
+) {
+
+  const oldModal =
+    document.getElementById(
+      'prescriptionDetailModal'
+    );
+
+
+  if (oldModal) {
+    oldModal.remove();
+  }
+
+
+  const details =
+    Array.isArray(
+      resep.detail
+    )
+      ? resep.detail
+      : [];
+
+
+  document.body.insertAdjacentHTML(
+    'beforeend',
+    `
+
+    <div
+      id="prescriptionDetailModal"
+      class="modal show"
+    >
+
+      <div
+        class="modal-box"
+        style="
+          max-width:900px;
+          max-height:90vh;
+          overflow:auto;
+        "
+      >
+
+        <div class="modal-header">
+
+          <div class="modal-title">
+            💉 Detail Resep
+          </div>
+
+
+          <button
+            class="modal-close"
+            onclick="closePrescriptionDetail()"
+          >
+            ×
+          </button>
+
+        </div>
+
+
+        <div class="modal-body">
+
+
+          <div
+            class="form-grid"
+            style="margin-bottom:20px;"
+          >
+
+            <div class="form-group">
+
+              <label class="form-label">
+                ID Resep
+              </label>
+
+              <input
+                class="form-control"
+                readonly
+                value="${escapeAttr(
+                  resep.resepId
+                )}"
+              >
+
+            </div>
+
+
+            <div class="form-group">
+
+              <label class="form-label">
+                Tanggal
+              </label>
+
+              <input
+                class="form-control"
+                readonly
+                value="${escapeAttr(
+                  resep.tanggal ||
+                  ''
+                )}"
+              >
+
+            </div>
+
+
+            <div class="form-group">
+
+              <label class="form-label">
+                No. RM
+              </label>
+
+              <input
+                class="form-control"
+                readonly
+                value="${escapeAttr(
+                  resep.noRM ||
+                  ''
+                )}"
+              >
+
+            </div>
+
+
+            <div class="form-group">
+
+              <label class="form-label">
+                Pasien
+              </label>
+
+              <input
+                class="form-control"
+                readonly
+                value="${escapeAttr(
+                  resep.namaPasien ||
+                  ''
+                )}"
+              >
+
+            </div>
+
+
+            <div class="form-group">
+
+              <label class="form-label">
+                Pemeriksa
+              </label>
+
+              <input
+                class="form-control"
+                readonly
+                value="${escapeAttr(
+                  resep.dokterBidan ||
+                  ''
+                )}"
+              >
+
+            </div>
+
+
+            <div class="form-group">
+
+              <label class="form-label">
+                Status
+              </label>
+
+              <div
+                style="padding-top:9px;"
+              >
+                ${prescriptionStatusBadge(
+                  resep.status
+                )}
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="card">
+
+            <h3
+              style="
+                margin-top:0;
+              "
+            >
+              💊 Obat Resep
+            </h3>
+
+
+            <div class="table-wrap">
+
+              <table>
+
+                <thead>
+
+                  <tr>
+
+                    <th>Obat</th>
+                    <th>Jumlah</th>
+                    <th>Dosis</th>
+                    <th>Aturan Pakai</th>
+                    <th>Harga</th>
+                    <th>Subtotal</th>
+
+                  </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                  ${
+                    details.length
+                      ? details.map(
+                          function(item) {
+
+                            return `
+
+                              <tr>
+
+                                <td>
+
+                                  <strong>
+                                    ${escapeHTML(
+                                      item.namaObat ||
+                                      ''
+                                    )}
+                                  </strong>
+
+                                  <div
+                                    class="muted"
+                                    style="
+                                      font-size:11px;
+                                    "
+                                  >
+                                    ${escapeHTML(
+                                      item.kodeObat ||
+                                      ''
+                                    )}
+                                  </div>
+
+                                </td>
+
+
+                                <td>
+
+                                  ${formatNumber(
+                                    item.jumlah
+                                  )}
+
+                                  ${escapeHTML(
+                                    item.satuan ||
+                                    ''
+                                  )}
+
+                                </td>
+
+
+                                <td>
+                                  ${escapeHTML(
+                                    item.dosis ||
+                                    '-'
+                                  )}
+                                </td>
+
+
+                                <td>
+                                  ${escapeHTML(
+                                    item.aturanPakai ||
+                                    '-'
+                                  )}
+                                </td>
+
+
+                                <td>
+                                  ${formatRupiah(
+                                    item.harga
+                                  )}
+                                </td>
+
+
+                                <td>
+                                  <strong>
+                                    ${formatRupiah(
+                                      item.subtotal
+                                    )}
+                                  </strong>
+                                </td>
+
+                              </tr>
+
+                            `;
+
+                          }
+                        ).join('')
+                      : `
+                        <tr>
+
+                          <td
+                            colspan="6"
+                            style="
+                              text-align:center;
+                              padding:30px;
+                            "
+                          >
+                            Tidak ada detail obat.
+                          </td>
+
+                        </tr>
+                      `
+                  }
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          </div>
+
+
+          ${
+            resep.catatan
+              ? `
+                <div
+                  class="card"
+                  style="margin-top:15px;"
+                >
+
+                  <strong>
+                    Catatan
+                  </strong>
+
+                  <div
+                    style="
+                      margin-top:8px;
+                    "
+                  >
+                    ${escapeHTML(
+                      resep.catatan
+                    )}
+                  </div>
+
+                </div>
+              `
+              : ''
+          }
+
+
+          <div
+            style="
+              display:flex;
+              justify-content:flex-end;
+              gap:10px;
+              margin-top:20px;
+            "
+          >
+
+            ${
+              String(
+                resep.status ||
+                ''
+              ).toUpperCase() ===
+              'MENUNGGU'
+                ? `
+                  <button
+                    class="btn btn-primary"
+                    onclick="
+                      changePrescriptionStatus(
+                        '${escapeAttr(
+                          resep.resepId
+                        )}',
+                        'DIPROSES'
+                      )
+                    "
+                  >
+                    ⚙️ Proses
+                  </button>
+
+                  <button
+                    class="btn btn-danger"
+                    onclick="
+                      changePrescriptionStatus(
+                        '${escapeAttr(
+                          resep.resepId
+                        )}',
+                        'BATAL'
+                      )
+                    "
+                  >
+                    Batal
+                  </button>
+                `
+                : ''
+            }
+
+
+            ${
+              String(
+                resep.status ||
+                ''
+              ).toUpperCase() ===
+              'DIPROSES'
+                ? `
+                  <button
+                    class="btn btn-success"
+                    onclick="
+                      changePrescriptionStatus(
+                        '${escapeAttr(
+                          resep.resepId
+                        )}',
+                        'SELESAI'
+                      )
+                    "
+                  >
+                    ✓ Selesai
+                  </button>
+                `
+                : ''
+            }
+
+
+            <button
+              class="btn btn-secondary"
+              onclick="closePrescriptionDetail()"
+            >
+              Tutup
+            </button>
+
+          </div>
+
+
+        </div>
+
+      </div>
+
+    </div>
+
+    `
+  );
+
+}
+
+
+/* ============================================================
+ * UBAH STATUS RESEP
+ * ============================================================ */
+
+function changePrescriptionStatus(
+  resepId,
+  newStatus
+) {
+
+  let message =
+    'Apakah Anda yakin ingin mengubah status resep menjadi ' +
+    newStatus +
+    '?';
+
+
+  if (
+    newStatus === 'BATAL'
+  ) {
+
+    message =
+      'Batalkan resep ini?';
+
+  }
+
+
+  if (
+    !confirm(
+      message
+    )
+  ) {
+
+    return;
+
+  }
+
+
+  showLoading(
+    'Memperbarui status resep...'
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        hideLoading();
+
+
+        showToast(
+          result &&
+          result.message
+            ? result.message
+            : 'Status resep berhasil diubah.'
+        );
+
+
+        closePrescriptionDetail();
+
+
+        loadPrescriptions();
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        hideLoading();
+
+        handleServerError(
+          error
+        );
+
+      }
+    )
+
+    .updatePrescriptionStatus(
+      sessionToken,
+      resepId,
+      newStatus
+    );
+
+}
+
+
+/* ============================================================
+ * TUTUP DETAIL RESEP
+ * ============================================================ */
+
+function closePrescriptionDetail() {
+
+  const modal =
+    document.getElementById(
+      'prescriptionDetailModal'
+    );
+
+
+  if (modal) {
+    modal.remove();
+  }
+
+}
+
+
+/* ============================================================
+ * TUTUP FORM RESEP
+ * ============================================================ */
+
+function closePrescriptionModal() {
+
+  const modal =
+    document.getElementById(
+      'prescriptionModal'
+    );
+
+
+  if (modal) {
+    modal.remove();
+  }
+
+
+  prescriptionItems = [];
+
+}
 
 </script>
 
