@@ -2,7 +2,7 @@
  * PMB SETIAWATI
  * SISTEM INFORMASI PRAKTIK MANDIRI BIDAN
  *
- * V1 TAHAP 8C
+ * V1 TAHAP 8D
  *
  * BASELINE:
  * - Login
@@ -10882,6 +10882,16 @@ function getPharmacyPrescriptionDetail(
     semuaStokCukup:
       semuaStokCukup,
 
+    /*
+     * Digunakan oleh halaman Farmasi
+     */
+    detail:
+      items,
+
+    /*
+     * Tetap pertahankan items
+     * agar kompatibel dengan fungsi lain
+     */
     items:
       items
 
