@@ -16837,4 +16837,1003 @@ function testPaymentHistoryDebug() {
 
 }
  
+ 
+/* ============================================================
+   TAHAP 9C
+   LAPORAN KEUANGAN
+   ============================================================ */
 
+function getFinancialReport(
+  token,
+  tanggalMulai,
+  tanggalSelesai,
+  jenis
+) {
+
+  /* ==========================================================
+     SESSION
+     ========================================================== */
+
+  requireSession_(token);
+
+
+  /* ==========================================================
+     NORMALISASI PARAMETER
+     ========================================================== */
+
+  tanggalMulai =
+    String(
+      tanggalMulai || ''
+    ).trim();
+
+
+  tanggalSelesai =
+    String(
+      tanggalSelesai || ''
+    ).trim();
+
+
+  jenis =
+    String(
+      jenis || 'SEMUA'
+    )
+      .trim()
+      .toUpperCase();
+
+
+  /* ==========================================================
+     VALIDASI JENIS
+     ========================================================== */
+
+  const allowedJenis = [
+    'SEMUA',
+    'PENDAPATAN',
+    'PENGELUARAN'
+  ];
+
+
+  if (
+    allowedJenis.indexOf(
+      jenis
+    ) === -1
+  ) {
+
+    throw new Error(
+      'Jenis transaksi tidak valid.'
+    );
+
+  }
+
+
+  /* ==========================================================
+     DEFAULT TANGGAL
+     
+     Jika tanggal tidak dikirim:
+     gunakan hari ini.
+     ========================================================== */
+
+  const today =
+    getTodayString_();
+
+
+  if (!tanggalMulai) {
+
+    tanggalMulai =
+      today;
+
+  }
+
+
+  if (!tanggalSelesai) {
+
+    tanggalSelesai =
+      tanggalMulai;
+
+  }
+
+
+  /* ==========================================================
+     VALIDASI FORMAT TANGGAL
+     ========================================================== */
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      tanggalMulai
+    )
+  ) {
+
+    throw new Error(
+      'Tanggal mulai tidak valid.'
+    );
+
+  }
+
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      tanggalSelesai
+    )
+  ) {
+
+    throw new Error(
+      'Tanggal selesai tidak valid.'
+    );
+
+  }
+
+
+  if (
+    tanggalMulai >
+    tanggalSelesai
+  ) {
+
+    throw new Error(
+      'Tanggal mulai tidak boleh lebih besar dari tanggal selesai.'
+    );
+
+  }
+
+
+  /* ==========================================================
+     SHEET TRANSAKSI
+     ========================================================== */
+
+  const transactionSheet =
+    getSheetByConfig(
+      'TRANSAKSI'
+    );
+
+
+  const transactionData =
+    transactionSheet
+      .getDataRange()
+      .getValues();
+
+
+  if (
+    transactionData.length < 2
+  ) {
+
+    return {
+
+      success: true,
+
+      tanggalMulai:
+        tanggalMulai,
+
+      tanggalSelesai:
+        tanggalSelesai,
+
+      jenis:
+        jenis,
+
+      summary: {
+
+        pendapatan:
+          0,
+
+        pengeluaran:
+          0,
+
+        saldoBersih:
+          0,
+
+        jumlahTransaksi:
+          0
+
+      },
+
+      data: []
+
+    };
+
+  }
+
+
+  /* ==========================================================
+     HEADER MAP
+     ========================================================== */
+
+  const transactionMap =
+    getHeaderMap_(
+      transactionData[0]
+    );
+
+
+  /* ==========================================================
+     HASIL
+     ========================================================== */
+
+  const result = [];
+
+
+  let totalPendapatan =
+    0;
+
+
+  let totalPengeluaran =
+    0;
+
+
+  let jumlahTransaksi =
+    0;
+
+
+  /* ==========================================================
+     LOOP TRANSAKSI
+     ========================================================== */
+
+  for (
+    let i = 1;
+    i < transactionData.length;
+    i++
+  ) {
+
+    const row =
+      transactionData[i];
+
+
+    /* ========================================================
+       TRANSAKSI ID
+       ======================================================== */
+
+    const transaksiId =
+      transactionMap.TRANSAKSI_ID !== undefined
+        ? String(
+            row[
+              transactionMap.TRANSAKSI_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    if (!transaksiId) {
+
+      continue;
+
+    }
+
+
+    /* ========================================================
+       TANGGAL
+       ======================================================== */
+
+    const tanggalValue =
+      transactionMap.TANGGAL !== undefined
+        ? row[
+            transactionMap.TANGGAL
+          ]
+        : '';
+
+
+    const tanggal =
+      formatDate_(
+        tanggalValue
+      );
+
+
+    if (!tanggal) {
+
+      continue;
+
+    }
+
+
+    /* ========================================================
+       FILTER TANGGAL
+       ======================================================== */
+
+    if (
+      tanggal <
+      tanggalMulai
+    ) {
+
+      continue;
+
+    }
+
+
+    if (
+      tanggal >
+      tanggalSelesai
+    ) {
+
+      continue;
+
+    }
+
+
+    /* ========================================================
+       JENIS TRANSAKSI
+       ======================================================== */
+
+    const jenisTransaksi =
+      transactionMap.JENIS_TRANSAKSI !== undefined
+        ? String(
+            row[
+              transactionMap.JENIS_TRANSAKSI
+            ] || ''
+          )
+            .trim()
+            .toUpperCase()
+        : '';
+
+
+    if (
+      jenisTransaksi !==
+        'PENDAPATAN' &&
+      jenisTransaksi !==
+        'PENGELUARAN'
+    ) {
+
+      continue;
+
+    }
+
+
+    /* ========================================================
+       FILTER JENIS
+       ======================================================== */
+
+    if (
+      jenis !== 'SEMUA' &&
+      jenisTransaksi !== jenis
+    ) {
+
+      continue;
+
+    }
+
+
+    /* ========================================================
+       STATUS
+       ======================================================== */
+
+    const status =
+      transactionMap.STATUS !== undefined
+        ? String(
+            row[
+              transactionMap.STATUS
+            ] || ''
+          )
+            .trim()
+            .toUpperCase()
+        : '';
+
+
+    /* ========================================================
+       TRANSAKSI BATAL
+       TIDAK MASUK REKAP
+       ======================================================== */
+
+    if (
+      status === 'BATAL'
+    ) {
+
+      continue;
+
+    }
+
+
+    /* ========================================================
+       NILAI TRANSAKSI
+       
+       Gunakan GRAND_TOTAL bila tersedia.
+       Jika kosong, gunakan TOTAL.
+       ======================================================== */
+
+    let total =
+      transactionMap.GRAND_TOTAL !== undefined
+        ? Number(
+            row[
+              transactionMap.GRAND_TOTAL
+            ] || 0
+          )
+        : 0;
+
+
+    if (
+      !isFinite(total) ||
+      total === 0
+    ) {
+
+      total =
+        transactionMap.TOTAL !== undefined
+          ? Number(
+              row[
+                transactionMap.TOTAL
+              ] || 0
+            )
+          : 0;
+
+    }
+
+
+    if (
+      !isFinite(total)
+    ) {
+
+      total =
+        0;
+
+    }
+
+
+    /* ========================================================
+       DATA TAMBAHAN
+       ======================================================== */
+
+    const kunjunganId =
+      transactionMap.KUNJUNGAN_ID !== undefined
+        ? String(
+            row[
+              transactionMap.KUNJUNGAN_ID
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const noRM =
+      transactionMap.NO_RM !== undefined
+        ? String(
+            row[
+              transactionMap.NO_RM
+            ] || ''
+          ).trim()
+        : '';
+
+
+    const diskon =
+      transactionMap.DISKON !== undefined
+        ? Number(
+            row[
+              transactionMap.DISKON
+            ] || 0
+          )
+        : 0;
+
+
+    const keterangan =
+      transactionMap.KETERANGAN !== undefined
+        ? String(
+            row[
+              transactionMap.KETERANGAN
+            ] || ''
+          ).trim()
+        : '';
+
+
+    /* ========================================================
+       UPDATE SUMMARY
+       ======================================================== */
+
+    if (
+      jenisTransaksi ===
+      'PENDAPATAN'
+    ) {
+
+      totalPendapatan +=
+        total;
+
+    }
+    else if (
+      jenisTransaksi ===
+      'PENGELUARAN'
+    ) {
+
+      totalPengeluaran +=
+        total;
+
+    }
+
+
+    jumlahTransaksi++;
+
+
+    /* ========================================================
+       HASIL DETAIL
+       ======================================================== */
+
+    result.push({
+
+      transaksiId:
+        transaksiId,
+
+      kunjunganId:
+        kunjunganId,
+
+      noRM:
+        noRM,
+
+      tanggal:
+        tanggal,
+
+      jenisTransaksi:
+        jenisTransaksi,
+
+      total:
+        total,
+
+      diskon:
+        diskon,
+
+      grandTotal:
+        total,
+
+      status:
+        status,
+
+      keterangan:
+        keterangan
+
+    });
+
+  }
+
+
+  /* ==========================================================
+     URUTKAN TERBARU
+     ========================================================== */
+
+  result.sort(
+    function(a, b) {
+
+      const dateA =
+        String(
+          a.tanggal || ''
+        );
+
+
+      const dateB =
+        String(
+          b.tanggal || ''
+        );
+
+
+      if (
+        dateA !== dateB
+      ) {
+
+        return dateB.localeCompare(
+          dateA
+        );
+
+      }
+
+
+      return String(
+        b.transaksiId || ''
+      ).localeCompare(
+        String(
+          a.transaksiId || ''
+        )
+      );
+
+    }
+  );
+
+
+  /* ==========================================================
+     SALDO BERSIH
+     ========================================================== */
+
+  const saldoBersih =
+    totalPendapatan -
+    totalPengeluaran;
+
+
+  /* ==========================================================
+     RETURN
+     ========================================================== */
+
+  return {
+
+    success: true,
+
+    tanggalMulai:
+      tanggalMulai,
+
+    tanggalSelesai:
+      tanggalSelesai,
+
+    jenis:
+      jenis,
+
+    summary: {
+
+      pendapatan:
+        totalPendapatan,
+
+      pengeluaran:
+        totalPengeluaran,
+
+      saldoBersih:
+        saldoBersih,
+
+      jumlahTransaksi:
+        jumlahTransaksi
+
+    },
+
+    data:
+      result
+
+  };
+
+}
+ 
+
+ function testFinancialReport() {
+
+  /*
+   * Fungsi ini hanya untuk pengecekan struktur.
+   * getFinancialReport() membutuhkan session aktif,
+   * sehingga tester ini tidak menjalankan getFinancialReport()
+   * secara langsung tanpa token.
+   */
+
+  const sheet =
+    getSheetByConfig(
+      'TRANSAKSI'
+    );
+
+
+  const data =
+    sheet
+      .getDataRange()
+      .getValues();
+
+
+  const map =
+    getHeaderMap_(
+      data[0]
+    );
+
+
+  Logger.log(
+    '========================================'
+  );
+
+
+  Logger.log(
+    'TEST TAHAP 9C'
+  );
+
+
+  Logger.log(
+    'Jumlah baris TRANSAKSI: ' +
+    Math.max(
+      0,
+      data.length - 1
+    )
+  );
+
+
+  Logger.log(
+    'TRANSAKSI_ID column: ' +
+    map.TRANSAKSI_ID
+  );
+
+
+  Logger.log(
+    'KUNJUNGAN_ID column: ' +
+    map.KUNJUNGAN_ID
+  );
+
+
+  Logger.log(
+    'TANGGAL column: ' +
+    map.TANGGAL
+  );
+
+
+  Logger.log(
+    'JENIS_TRANSAKSI column: ' +
+    map.JENIS_TRANSAKSI
+  );
+
+
+  Logger.log(
+    'TOTAL column: ' +
+    map.TOTAL
+  );
+
+
+  Logger.log(
+    'GRAND_TOTAL column: ' +
+    map.GRAND_TOTAL
+  );
+
+
+  Logger.log(
+    'STATUS column: ' +
+    map.STATUS
+  );
+
+
+  Logger.log(
+    '========================================'
+  );
+
+}
+ 
+ /* =====================================================
+    TEST TAHAP 9C — getFinancialReport
+    ===================================================== */
+
+function testFinancialReport() {
+
+  Logger.log('========================================');
+  Logger.log('TEST getFinancialReport() — TAHAP 9C');
+  Logger.log('========================================');
+
+  /*
+   * TESTER INI MENGGUNAKAN LOGIN TEST.
+   *
+   * GANTI dua nilai di bawah dengan username
+   * dan password akun yang memang bisa login.
+   */
+
+  const username = 'ISI_USERNAME_DI_SINI';
+  const password = 'ISI_PASSWORD_DI_SINI';
+
+
+  if (
+    username === 'ISI_USERNAME_DI_SINI' ||
+    password === 'ISI_PASSWORD_DI_SINI'
+  ) {
+
+    throw new Error(
+      'Silakan isi username dan password test terlebih dahulu.'
+    );
+
+  }
+
+
+  /*
+   * LOGIN
+   */
+
+  Logger.log(
+    'Login sebagai: ' + username
+  );
+
+  const loginResult =
+    login(
+      username,
+      password
+    );
+
+
+  if (
+    !loginResult ||
+    !loginResult.success ||
+    !loginResult.token
+  ) {
+
+    throw new Error(
+      'Login test gagal.'
+    );
+
+  }
+
+
+  const token =
+    loginResult.token;
+
+
+  Logger.log(
+    'Login test berhasil.'
+  );
+
+
+  /*
+   * TANGGAL LAPORAN
+   */
+
+  const tanggal =
+    getTodayString_();
+
+
+  Logger.log(
+    'Tanggal laporan: ' + tanggal
+  );
+
+
+  /*
+   * PANGGIL BACKEND 9C
+   */
+
+  const result =
+    getFinancialReport(
+      token,
+      tanggal,
+      tanggal,
+      'SEMUA'
+    );
+
+
+  /*
+   * VALIDASI HASIL
+   */
+
+  if (
+    !result ||
+    result.success !== true
+  ) {
+
+    throw new Error(
+      'getFinancialReport() tidak mengembalikan hasil yang valid.'
+    );
+
+  }
+
+
+  Logger.log('----------------------------------------');
+  Logger.log('HASIL LAPORAN 9C');
+  Logger.log('----------------------------------------');
+
+  Logger.log(
+    'Success: ' +
+    result.success
+  );
+
+  Logger.log(
+    'Tanggal Mulai: ' +
+    result.tanggalMulai
+  );
+
+  Logger.log(
+    'Tanggal Selesai: ' +
+    result.tanggalSelesai
+  );
+
+  Logger.log(
+    'Jenis: ' +
+    result.jenis
+  );
+
+
+  /*
+   * SUMMARY
+   */
+
+  const summary =
+    result.summary || {};
+
+
+  Logger.log(
+    'Pendapatan: Rp' +
+    Number(
+      summary.pendapatan || 0
+    ).toLocaleString('id-ID')
+  );
+
+  Logger.log(
+    'Pengeluaran: Rp' +
+    Number(
+      summary.pengeluaran || 0
+    ).toLocaleString('id-ID')
+  );
+
+  Logger.log(
+    'Saldo Bersih: Rp' +
+    Number(
+      summary.saldoBersih || 0
+    ).toLocaleString('id-ID')
+  );
+
+  Logger.log(
+    'Jumlah Transaksi: ' +
+    Number(
+      summary.jumlahTransaksi || 0
+    )
+  );
+
+
+  /*
+   * DETAIL
+   */
+
+  Logger.log('----------------------------------------');
+  Logger.log('DETAIL TRANSAKSI');
+  Logger.log('----------------------------------------');
+
+
+  const data =
+    Array.isArray(result.data)
+      ? result.data
+      : [];
+
+
+  if (data.length === 0) {
+
+    Logger.log(
+      'Tidak ada transaksi pada tanggal tersebut.'
+    );
+
+  } else {
+
+    data.forEach(
+      function(item, index) {
+
+        Logger.log(
+          (index + 1) +
+          '. ' +
+          String(
+            item.transaksiId || ''
+          ) +
+          ' | ' +
+          String(
+            item.jenisTransaksi || ''
+          ) +
+          ' | Rp' +
+          Number(
+            item.grandTotal || 0
+          ).toLocaleString('id-ID') +
+          ' | ' +
+          String(
+            item.status || ''
+          )
+        );
+
+      }
+    );
+
+  }
+
+
+  /*
+   * JSON LENGKAP
+   *
+   * Berguna kalau nanti ada field yang perlu
+   * kita periksa sebelum membuat UI 9C.
+   */
+
+  Logger.log('----------------------------------------');
+  Logger.log('JSON HASIL');
+  Logger.log('----------------------------------------');
+
+  Logger.log(
+    JSON.stringify(
+      result,
+      null,
+      2
+    )
+  );
+
+
+  /*
+   * CLEANUP SESSION TEST
+   *
+   * Hanya menghapus session yang baru dibuat
+   * oleh tester ini.
+   */
+
+  try {
+
+    CacheService
+      .getScriptCache()
+      .remove(
+        'PMB_SESSION_' + token
+      );
+
+    Logger.log(
+      'Session test dibersihkan.'
+    );
+
+  } catch (error) {
+
+    Logger.log(
+      'Peringatan cleanup session: ' +
+      error.message
+    );
+
+  }
+
+
+  Logger.log('========================================');
+  Logger.log('TEST 9C SELESAI');
+  Logger.log('========================================');
+
+}
